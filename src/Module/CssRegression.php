@@ -136,7 +136,7 @@ class CssRegression extends Module
      */
     public function _afterStep(Step $step)
     {
-        if ($step->getAction() === 'seeNoDifferenceToReferenceImage') {
+        if ($step->getAction() === 'seeNoDifferenceToReferenceImage' && $this->config['automaticCleanup']) {
             // cleanup the temp image
             $identifier = str_replace('"', '', explode(',', $step->getArgumentsAsString())[0]);
             if (file_exists($this->moduleFileSystemUtil->getTempImagePath($identifier))) {
