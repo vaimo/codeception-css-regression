@@ -16,9 +16,8 @@ use mendicm\CodeceptionCssRegression\Util\FileSystem as RegressionFileSystem;
  *
  * ## Status
  *
- * * Maintainer: **Sascha Egerer**
- * * Stability: **beta**
- * * Contact: sascha.egerer@gmail.com
+ * * Maintainer: **Carlos Mendieta**
+ * * Contact: mendicm@gmail.com
  *
  * ## Configuration
  *
