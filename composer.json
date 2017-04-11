@@ -1,5 +1,5 @@
 {
-  "name": "saschaegerer/css-regression",
+  "name": "mendicm/css-regression",
   "description": "CSS Regression Module for Codeception",
   "type": "library",
   "license": "GPL-2.0+",
@@ -7,6 +7,10 @@
     {
       "name": "Sascha Egerer",
       "email": "sascha.egerer@gmail.com"
+    },
+    {
+      "name": "Carlos Mendieta",
+      "email": "mendicm@gmail.com"
     }
   ],
   "require": {
@@ -16,7 +20,7 @@
   },
   "autoload": {
     "psr-4": {
-      "SaschaEgerer\\CodeceptionCssRegression\\": "src"
+      "mendicm\\CodeceptionCssRegression\\": "src"
     }
   }
 }
