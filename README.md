@@ -5,7 +5,7 @@ CSS Regression tests in Codeception
 Install
 -------
 ```console
-$ composer require --dev saschaegerer/css-regression:dev-master
+$ composer require --dev mendicm/css-regression:dev-master
 ```
 
 Configure
@@ -15,13 +15,15 @@ modules:
     enabled:
         - WebDriver:
             ...
-        - \SaschaEgerer\CodeceptionCssRegression\Module\CssRegression:
-            depends: 'WebDriver'
+        - \mendicm\CodeceptionCssRegression\Module\CssRegression:
             referenceImageDirectory: 'referenceImages'
             failImageDirectory: 'failImages'
             maxDifference: 0.1
             automaticCleanup: true
+            module: WebDriver
+            fullScreenshots: false
 ```
+
 
 Usage
 -----

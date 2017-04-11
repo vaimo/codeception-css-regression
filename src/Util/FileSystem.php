@@ -1,8 +1,8 @@
 <?php
-namespace SaschaEgerer\CodeceptionCssRegression\Util;
+namespace mendicm\CodeceptionCssRegression\Util;
 
 use Codeception\Module;
-use SaschaEgerer\CodeceptionCssRegression\Module\CssRegression;
+use mendicm\CodeceptionCssRegression\Module\CssRegression;
 
 /**
  * Provide some methods for filesystem related actions
@@ -59,11 +59,7 @@ class FileSystem
      */
     public function getReferenceImagePath($identifier, $sizeString)
     {
-        $testFilename = $this->module->_getCurrentTestCase()->getTestFileName($this->module->_getCurrentTestCase());
-        $testName = pathinfo(str_replace($this->module->_getSuitePath(), '', $testFilename), PATHINFO_FILENAME);
-
         return $this->getReferenceImageDirectory()
-        . $testName . DIRECTORY_SEPARATOR
         . $sizeString . DIRECTORY_SEPARATOR
         . $this->sanitizeFilename($identifier) . '.png';
     }
@@ -96,7 +92,7 @@ class FileSystem
     public function sanitizeFilename($name)
     {
         // remove non alpha numeric characters
-        $name = preg_replace('/[^A-Za-z0-9\.]/', '', $name);
+        $name = preg_replace('/[^A-Za-z0-9\._\- ]/', '', $name);
 
         // capitalize first character of every word convert single spaces to underscrore
         $name = str_replace(" ", "_", ucwords($name));
@@ -113,8 +109,7 @@ class FileSystem
      */
     public function getFailImagePath($identifier, $sizeString, $suffix = 'fail')
     {
-        $testFilename = $this->module->_getCurrentTestCase()->getTestFileName($this->module->_getCurrentTestCase());
-        $testName = pathinfo(str_replace($this->module->_getSuitePath(), '', $testFilename), PATHINFO_FILENAME);
+        $testName = $this->module->_getCurrentTestCase()->getMetadata()->getName();
 
         $fileNameParts = array(
             $suffix,
@@ -151,10 +146,10 @@ class FileSystem
         $fileNameParts = array(
             $this->module->_getModuleInitTime(),
             $this->getCurrentWindowSizeString($this->module->_getWebdriver()),
-            $identifier,
+            $this->sanitizeFilename($identifier),
             'png'
         );
-        return $this->getTempDirectory() . $this->sanitizeFilename(implode('.', $fileNameParts));
+        return $this->getTempDirectory() . implode('.', $fileNameParts);
     }
 
     /**

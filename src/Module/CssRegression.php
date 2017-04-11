@@ -1,16 +1,15 @@
 <?php
-namespace SaschaEgerer\CodeceptionCssRegression\Module;
+namespace mendicm\CodeceptionCssRegression\Module;
 
 use Codeception\Exception\ElementNotFound;
 use Codeception\Exception\ModuleException;
-use Codeception\Lib\Interfaces\DependsOnModule;
 use Codeception\Module;
 use Codeception\Module\WebDriver;
 use Codeception\Step;
 use Codeception\TestCase;
 use Codeception\Util\FileSystem;
 use Facebook\WebDriver\Remote\RemoteWebElement;
-use SaschaEgerer\CodeceptionCssRegression\Util\FileSystem as RegressionFileSystem;
+use mendicm\CodeceptionCssRegression\Util\FileSystem as RegressionFileSystem;
 
 /**
  * Compares a screenshot of an element against a reference image
@@ -23,12 +22,16 @@ use SaschaEgerer\CodeceptionCssRegression\Util\FileSystem as RegressionFileSyste
  *
  * ## Configuration
  *
- * * maxDifference: 0.1 - the maximum difference between 2 images
- * * automaticCleanup: false - defines if the fail image folder should be cleaned up before a new test run is started.
- * * referenceImageDirectory:  - defines the folder where the reference images should be stored
- * * failImageDirectory:  - defines the folder where the fail images should be stored
+ * * maxDifference: float - the maximum difference between 2 images
+ * * automaticCleanup: bool - defines if the fail image folder should be cleaned up before a new test run is started.
+ * * referenceImageDirectory: string - defines the folder where the reference images should be stored
+ * * failImageDirectory: string - defines the folder where the fail images should be stored
+ * * fullScreenshots: bool - crop the screenshot using the absolute element coordinates or relative to current viewport
+ * *    (set false to use, for example with chromedriver)
+ * * module: string - defines the module where the WebDriver is getted, by default WebDriver but you can set any
+ * *    other module that extends WebDriver, like AngularJS
  */
-class CssRegression extends Module implements DependsOnModule
+class CssRegression extends Module
 {
     /**
      * @var WebDriver
@@ -43,7 +46,12 @@ class CssRegression extends Module implements DependsOnModule
     /**
      * @var array
      */
-    protected $config = ['maxDifference' => 0.01, 'automaticCleanup' => true];
+    protected $config = [
+        'maxDifference'    => 0.01,
+        'automaticCleanup' => true,
+        'fullScreenshots'  => true,
+        'module'           => 'WebDriver',
+    ];
 
     /**
      * @var string
@@ -101,16 +109,6 @@ class CssRegression extends Module implements DependsOnModule
     }
 
     /**
-     * Specifies class or module which is required for current one.
-     *
-     * @return array
-     */
-    public function _depends()
-    {
-        return array('\\Codeception\\Module\\WebDriver' => 'This module requires the WebDriver module');
-    }
-
-    /**
      * Before each suite
      *
      * @param array $settings
@@ -129,14 +127,7 @@ class CssRegression extends Module implements DependsOnModule
     public function _before(TestCase $test)
     {
         $this->currentTestCase = $test;
-    }
-
-    /**
-     * @param WebDriver $browser
-     */
-    public function _inject(WebDriver $browser)
-    {
-        $this->webDriver = $browser;
+        $this->webDriver = $this->getModule($this->config['module']);
     }
 
     /**
@@ -148,8 +139,9 @@ class CssRegression extends Module implements DependsOnModule
     {
         if ($step->getAction() === 'seeNoDifferenceToReferenceImage') {
             // cleanup the temp image
-            if (file_exists($this->moduleFileSystemUtil->getTempImagePath($step->getArguments()[0]))) {
-                @unlink($this->moduleFileSystemUtil->getTempImagePath($step->getArguments()[0]));
+            $identifier = str_replace('"', '', explode(',', $step->getArgumentsAsString())[0]);
+            if (file_exists($this->moduleFileSystemUtil->getTempImagePath($identifier))) {
+                @unlink($this->moduleFileSystemUtil->getTempImagePath($identifier));
             }
         }
     }
@@ -188,7 +180,7 @@ class CssRegression extends Module implements DependsOnModule
             $this->moduleFileSystemUtil->createDirectoryRecursive(dirname($referenceImagePath));
             copy($image->getImageFilename(), $referenceImagePath);
 
-            $this->currentTestCase->markTestIncomplete(
+            $this->fail(
                 'Reference Image does not exist.
                 Test is skipeed but will now copy reference image to target directory...'
             );
@@ -199,7 +191,7 @@ class CssRegression extends Module implements DependsOnModule
             list($comparedImage, $difference) = $referenceImage->compareImages($image,
                 \Imagick::METRIC_MEANSQUAREERROR);
 
-            $calculatedDifferenceValue = round((float) substr($difference, 0, 6) * 100, 2);
+            $calculatedDifferenceValue = round((float) round($difference, 4) * 100, 2);
 
             $this->currentTestCase->getScenario()->comment(
                 'Difference between reference and current image is around ' . $calculatedDifferenceValue . '%'
@@ -282,18 +274,23 @@ class CssRegression extends Module implements DependsOnModule
      */
     protected function _createScreenshot($referenceImageName, RemoteWebElement $element)
     {
-        // Try scrolling the element into the view port
-        $element->getLocationOnScreenOnceScrolledIntoView();
+        if (!$this->config['fullScreenshots']) {
+            // Try scrolling the element into the view port
+            $element->getLocationOnScreenOnceScrolledIntoView();
+        }
 
         $tempImagePath = $this->moduleFileSystemUtil->getTempImagePath($referenceImageName);
         $this->webDriver->webDriver->takeScreenshot($tempImagePath);
 
         $image = new \Imagick($tempImagePath);
+
+        $takeCoordinatesFrom = $this->config['fullScreenshots'] ? 'onPage' : 'inViewPort';
+
         $image->cropImage(
             $element->getSize()->getWidth(),
             $element->getSize()->getHeight(),
-            $element->getCoordinates()->onPage()->getX(),
-            $element->getCoordinates()->onPage()->getY()
+            $element->getCoordinates()->{$takeCoordinatesFrom}()->getX(),
+            $element->getCoordinates()->{$takeCoordinatesFrom}()->getY()
         );
         $image->setImageFormat('png');
         $image->writeImage($tempImagePath);
