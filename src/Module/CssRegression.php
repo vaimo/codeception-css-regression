@@ -186,25 +186,39 @@ class CssRegression extends Module
         } else {
             $referenceImage = new \Imagick($referenceImagePath);
 
-            /** @var \Imagick $comparedImage */
-            list($comparedImage, $difference) = $referenceImage->compareImages($image,
-                \Imagick::METRIC_MEANSQUAREERROR);
+            // Match image sizes to prevent Imagick exception
+            $referenceImageSize = $referenceImage->getImageGeometry();
+            $imageSize          = $image->getImageGeometry();
+            $maxWidth           = max($referenceImageSize['width'], $imageSize['width']);
+            $maxHeight          = max($referenceImageSize['height'], $imageSize['height']);
 
-            $calculatedDifferenceValue = round((float) round($difference, 4) * 100, 2);
+            $referenceImage->extentImage($maxWidth, $maxHeight, 0, 0);
+            $image->extentImage($maxWidth, $maxHeight, 0, 0);
 
-            $this->currentTestCase->getScenario()->comment(
-                'Difference between reference and current image is around ' . $calculatedDifferenceValue . '%'
-            );
+            try {
+                /** @var \Imagick $comparedImage */
+                list($comparedImage, $difference) = $referenceImage->compareImages($image,
+                    \Imagick::METRIC_MEANSQUAREERROR);
 
-            if ($calculatedDifferenceValue > $this->config['maxDifference']) {
-                $failImagePath = $this->moduleFileSystemUtil->getFailImagePath($referenceImageIdentifier, $windowSizeString, 'diff');
+                $calculatedDifferenceValue = round((float)round($difference, 4) * 100, 2);
 
-                $this->moduleFileSystemUtil->createDirectoryRecursive(dirname($failImagePath));
+                $this->currentTestCase->getScenario()->comment(
+                    'Difference between reference and current image is around ' . $calculatedDifferenceValue . '%'
+                );
 
-                $image->writeImage($this->moduleFileSystemUtil->getFailImagePath($referenceImageIdentifier, $windowSizeString, 'fail'));
-                $comparedImage->setImageFormat('png');
-                $comparedImage->writeImage($failImagePath);
-                $this->fail('Image does not match to the reference image.');
+                if ($calculatedDifferenceValue > $this->config['maxDifference']) {
+                    $failImagePath = $this->moduleFileSystemUtil->getFailImagePath($referenceImageIdentifier, $windowSizeString, 'diff');
+
+                    $this->moduleFileSystemUtil->createDirectoryRecursive(dirname($failImagePath));
+
+                    $image->writeImage($this->moduleFileSystemUtil->getFailImagePath($referenceImageIdentifier, $windowSizeString, 'fail'));
+                    $comparedImage->setImageFormat('png');
+                    $comparedImage->writeImage($failImagePath);
+                    $this->fail('Image does not match to the reference image.');
+                }
+            } catch (\ImagickException $e) {
+                $this->debug("IMagickException! could not campare $referenceImage and $image.\nExceptionMessage: " . $e->getMessage());
+                $this->fail($e->getMessage() . ", $referenceImage and $image.");
             }
         }
     }
