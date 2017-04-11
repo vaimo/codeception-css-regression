@@ -29,6 +29,8 @@ use mendicm\CodeceptionCssRegression\Util\FileSystem as RegressionFileSystem;
  * *    (set false to use, for example with chromedriver)
  * * module: string - defines the module where the WebDriver is getted, by default WebDriver but you can set any
  * *    other module that extends WebDriver, like AngularJS
+ * * widthOffset: int - defines different browser viewport width between OS, for example on Mac a screen width of 1300px
+ *      is actually 1300px of viewport, but using xvfb and chrome 1300px is 1285px of viewport
  */
 class CssRegression extends Module
 {
@@ -50,6 +52,7 @@ class CssRegression extends Module
         'automaticCleanup' => true,
         'fullScreenshots'  => true,
         'module'           => 'WebDriver',
+        'widthOffset'      => 0,
     ];
 
     /**
