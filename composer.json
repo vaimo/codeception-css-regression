@@ -14,13 +14,13 @@
     }
   ],
   "require": {
-    "codeception/codeception": "~2.1",
+    "codeception/codeception": "*",
     "php": ">=5.4.0",
     "ext-imagick": "*"
   },
   "autoload": {
     "psr-4": {
-      "mendicm\\CodeceptionCssRegression\\": "src"
+      "Vaimo\\CodeceptionCssRegression\\": "src"
     }
   }
 }
