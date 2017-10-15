@@ -4,8 +4,8 @@ CSS Regression tests in Codeception
 
 Install
 -------
-```console
-$ composer require --dev mendicm/css-regression:dev-master
+```shell
+$ composer require --dev mendicm/css-regression
 ```
 
 Configure
