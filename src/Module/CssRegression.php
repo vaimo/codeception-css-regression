@@ -9,7 +9,7 @@ use Codeception\Step;
 use Codeception\TestCase;
 use Codeception\Util\FileSystem;
 use Facebook\WebDriver\Remote\RemoteWebElement;
-use mendicm\CodeceptionCssRegression\Util\FileSystem as RegressionFileSystem;
+use Vaimo\CodeceptionCssRegression\Util\FileSystem as RegressionFileSystem;
 
 /**
  * Compares a screenshot of an element against a reference image

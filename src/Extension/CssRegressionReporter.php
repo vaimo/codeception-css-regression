@@ -6,8 +6,8 @@ use Codeception\Event\StepEvent;
 use Codeception\Event\SuiteEvent;
 use Codeception\Events;
 use Codeception\Module\WebDriver;
-use mendicm\CodeceptionCssRegression\Module\CssRegression;
-use mendicm\CodeceptionCssRegression\Util\FileSystem;
+use Vaimo\CodeceptionCssRegression\Module\CssRegression;
+use Vaimo\CodeceptionCssRegression\Util\FileSystem;
 
 /**
  * Generates an html file with all failed tests that contains the reference image, failed image and diff image.

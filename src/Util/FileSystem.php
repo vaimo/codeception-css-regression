@@ -2,7 +2,7 @@
 namespace Vaimo\CodeceptionCssRegression\Util;
 
 use Codeception\Module;
-use mendicm\CodeceptionCssRegression\Module\CssRegression;
+use Vaimo\CodeceptionCssRegression\Module\CssRegression;
 
 /**
  * Provide some methods for filesystem related actions
