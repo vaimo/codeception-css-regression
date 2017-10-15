@@ -1,5 +1,5 @@
 <?php
-namespace mendicm\CodeceptionCssRegression\Module;
+namespace Vaimo\CodeceptionCssRegression\Module;
 
 use Codeception\Exception\ElementNotFound;
 use Codeception\Exception\ModuleException;

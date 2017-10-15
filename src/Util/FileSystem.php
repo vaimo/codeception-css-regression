@@ -1,5 +1,5 @@
 <?php
-namespace mendicm\CodeceptionCssRegression\Util;
+namespace Vaimo\CodeceptionCssRegression\Util;
 
 use Codeception\Module;
 use mendicm\CodeceptionCssRegression\Module\CssRegression;

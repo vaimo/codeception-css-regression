@@ -1,5 +1,5 @@
 <?php
-namespace mendicm\CodeceptionCssRegression\Extension;
+namespace Vaimo\CodeceptionCssRegression\Extension;
 
 use Codeception\Event\PrintResultEvent;
 use Codeception\Event\StepEvent;
