@@ -1,5 +1,5 @@
 {
-  "name": "mendicm/css-regression",
+  "name": "vaimo/codeception-css-regression",
   "description": "CSS Regression Module for Codeception",
   "type": "library",
   "license": "GPL-2.0+",
