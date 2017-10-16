@@ -117,10 +117,6 @@ class CssRegression extends Module
                 FileSystem::doEmptyDir($this->moduleFileSystemUtil->getFailImageDirectory());
             }
         }
-
-        $this->moduleFileSystemUtil->createDirectoryRecursive($this->moduleFileSystemUtil->getTempDirectory());
-        $this->moduleFileSystemUtil->createDirectoryRecursive($this->moduleFileSystemUtil->getReferenceImageDirectory());
-        $this->moduleFileSystemUtil->createDirectoryRecursive($this->moduleFileSystemUtil->getFailImageDirectory());
     }
 
     /**
@@ -159,6 +155,15 @@ class CssRegression extends Module
                 @unlink($this->moduleFileSystemUtil->getTempImagePath($identifier));
             }
         }
+    }
+    
+    protected function writeImage($image, $path)
+    {
+        $this->moduleFileSystemUtil->createDirectoryRecursive(
+            dirname($path)
+        );
+
+        $image->writeImage($path);
     }
     
     /**
@@ -232,18 +237,35 @@ class CssRegression extends Module
                 );
 
                 if ($calculatedDifferenceValue > $this->config['maxDifference']) {
-                    $failImagePath = $this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'diff');
+                    $this->writeImage(
+                        $image,
+                        $this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'fail')
+                    );
 
-                    $this->moduleFileSystemUtil->createDirectoryRecursive(dirname($failImagePath));
-
-                    $image->writeImage($this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'fail'));
                     $comparedImage->setImageFormat('png');
-                    $comparedImage->writeImage($failImagePath);
-                    $this->fail('Image does not match to the reference image.');
+
+                    $this->writeImage(
+                        $comparedImage,
+                        $this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'diff')
+                    );
+                    
+                    $this->fail(
+                        sprintf('Page content for "%s" differs from reference image.', $selector)
+                    );
                 }
             } catch (\ImagickException $e) {
-                $this->debug("IMagickException! could not campare $referenceImage and $image.\nExceptionMessage: " . $e->getMessage());
-                $this->fail($e->getMessage() . ", $referenceImage and $image.");
+                $this->debug(
+                    sprintf(
+                        "Could not campare %s and %s: %s",
+                        $referenceImage,
+                        $image,
+                        $e->getMessage()
+                    )
+                );
+                
+                $this->fail(
+                    sprintf('%s, %s and %s.', $e->getMessage(), $referenceImage, $image)
+                );
             }
         }
     }
@@ -331,6 +353,11 @@ class CssRegression extends Module
             $element->getCoordinates()->{$takeCoordinatesFrom}()->getY()
         );
         $image->setImageFormat('png');
+
+        $this->moduleFileSystemUtil->createDirectoryRecursive(
+            dirname($tempImagePath)
+        );
+        
         $image->writeImage($tempImagePath);
 
         return $image;
