@@ -5,7 +5,7 @@ CSS Regression tests in Codeception
 Install
 -------
 ```shell
-composer require mendicm/css-regression
+composer require vaimo/codeception-css-regression
 ```
 
 Configure
