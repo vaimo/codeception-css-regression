@@ -122,7 +122,7 @@ class CssRegressionReporter extends \Codeception\Extension
      */
     public function stepAfter(StepEvent $stepEvent)
     {
-        if ($stepEvent->getStep()->hasFailed() && $stepEvent->getStep()->getAction('seeNoDifferenceToReferenceImage')) {
+        if ($stepEvent->getStep()->hasFailed() && $stepEvent->getStep()->getAction('dontSeeDifferencesWithReferenceImage')) {
             /** @var WebDriver $stepWebDriver */
             $stepWebDriver = $stepEvent->getTest()->getScenario()->current('modules')['WebDriver'];
             $identifier = $stepEvent->getStep()->getArguments()[0];

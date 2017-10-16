@@ -152,7 +152,7 @@ class CssRegression extends Module
      */
     public function _afterStep(Step $step)
     {
-        if ($step->getAction() === 'seeNoDifferenceToReferenceImage' && $this->config['automaticCleanup']) {
+        if ($step->getAction() === 'dontSeeDifferencesWithReferenceImage' && $this->config['automaticCleanup']) {
             // cleanup the temp image
             $identifier = str_replace('"', '', explode(',', $step->getArgumentsAsString())[0]);
             if (file_exists($this->moduleFileSystemUtil->getTempImagePath($identifier))) {
@@ -162,18 +162,15 @@ class CssRegression extends Module
     }
     
     /**
-     * Checks item in Memcached exists and the same as expected.
+     * Checks if there are any visual changes to the page when compared to previously 
+     * captured reference image.   
      *
      * @param string $imageIdentifier
-     * @param null|string $selector
+     * @param string $selector
      * @throws ModuleException
      */
-    public function seeNoDifferenceToReferenceImage($imageIdentifier, $selector = null)
+    public function dontSeeDifferencesWithReferenceImage($imageIdentifier, $selector = 'body')
     {
-        if ($selector === null) {
-            $selector = 'body';
-        }
-
         $elements = $this->webDriver->_findElements($selector);
 
         if (count($elements) == 0) {
