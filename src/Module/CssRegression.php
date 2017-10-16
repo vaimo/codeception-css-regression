@@ -83,6 +83,11 @@ class CssRegression extends Module
      * @var array
      */
     protected $hiddenSuiteElements;
+
+    /**
+     * @var int
+     */
+    private $captureCounter = 0;
     
     public function _initialize()
     {
@@ -155,14 +160,14 @@ class CssRegression extends Module
      * Checks if there are any visual changes to the page when compared to previously 
      * captured reference image.   
      *
-     * @param string $imageIdentifier
+     * @param string $identifier
      * @param string $selector
      * @throws ModuleException
      */
-    public function dontSeeDifferencesWithReferenceImage($selector = 'body', $imageIdentifier = null)
+    public function dontSeeDifferencesWithReferenceImage($selector = 'body', $identifier = null)
     {
-        if (!$imageIdentifier) {
-            
+        if (!$identifier) {
+            $identifier = 'capture-' . ++$this->captureCounter;
         }
         
         $elements = $this->webDriver->_findElements($selector);
@@ -180,11 +185,11 @@ class CssRegression extends Module
         }
         
         /** @var RemoteWebElement $element */
-        $image = $this->_createScreenshot($imageIdentifier, reset($elements));
+        $image = $this->_createScreenshot($identifier, reset($elements));
 
         $windowSizeString = $this->moduleFileSystemUtil->getCurrentWindowSizeString($this->webDriver);
 
-        $imageName = $imageIdentifier . '-' . $windowSizeString;
+        $imageName = $identifier . '-' . $windowSizeString;
         $contextPath = $this->runtimeUtils->getContextPath($this->currentTestCase);
         
         $referenceImagePath = $this->moduleFileSystemUtil->getReferenceImagePath($imageName, $contextPath); 
@@ -193,7 +198,7 @@ class CssRegression extends Module
             $this->logger->writeln(
                 sprintf(
                     '~ <comment>Generating reference image "%s" ...</comment>',
-                    $imageIdentifier
+                    $identifier
                 )
             );
             
@@ -229,7 +234,7 @@ class CssRegression extends Module
                     sprintf(
                         '<%s>Visual difference detected for "%s": %s%%</%s>',
                         $messageTag,
-                        $imageIdentifier,
+                        $identifier,
                         $difference,
                         $messageTag
                     )
@@ -249,13 +254,13 @@ class CssRegression extends Module
                     );
                     
                     $this->fail(
-                        sprintf('Page content for "%s" differs from reference image.', $selector)
+                        sprintf('Page content for "%s" differs from reference image', $selector)
                     );
                 }
             } catch (\ImagickException $e) {
                 $this->debug(
                     sprintf(
-                        "Could not compare %s and %s: %s",
+                        'Could not compare %s and %s: %s',
                         $referenceImage,
                         $image,
                         $e->getMessage()
@@ -263,7 +268,7 @@ class CssRegression extends Module
                 );
                 
                 $this->fail(
-                    sprintf('%s, %s and %s.', $e->getMessage(), $referenceImage, $image)
+                    sprintf('%s, %s and %s', $e->getMessage(), $referenceImage, $image)
                 );
             }
         }
