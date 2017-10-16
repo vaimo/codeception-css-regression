@@ -30,6 +30,6 @@ Usage
 ```php
 $I->amOnPage('/');
 $I->hideElements('.socialMediaButton');
-$I->dontSeeDifferencesWithReferenceImage('NewsArticle', '#news-article');
+$I->dontSeeDifferencesWithReferenceImage('#news-article', 'NewsArticle');
 ```
 

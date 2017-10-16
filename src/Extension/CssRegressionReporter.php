@@ -111,7 +111,7 @@ class CssRegressionReporter extends \Codeception\Extension
 
             $pageTemplate = new \Text_Template($this->config['templateFolder'] . 'Page.html');
             $pageTemplate->setVar(array('items' => $items));
-            $reportPath = $this->fileSystemUtil->getFailImageDirectory() . 'index.html';
+            $reportPath = $this->fileSystemUtil->getFailImageDirectory() . DIRECTORY_SEPARATOR .  'index.html';
             $pageTemplate->renderTo($reportPath);
             $printResultEvent->getPrinter()->write('Report has been created: ' . $reportPath . "\n");
         }

@@ -12,25 +12,17 @@ use Facebook\WebDriver\Remote\RemoteWebElement;
 use Vaimo\CodeceptionCssRegression\Util\FileSystem as RegressionFileSystem;
 
 /**
- * Compares a screenshot of an element against a reference image
- *
- * ## Status
- *
- * * Maintainer: **Carlos Mendieta**
- * * Contact: mendicm@gmail.com
- *
  * ## Configuration
- *
- * * maxDifference: float - the maximum difference between 2 images
- * * automaticCleanup: bool - defines if the fail image folder should be cleaned up before a new test run is started.
- * * referenceImageDirectory: string - defines the folder where the reference images should be stored
- * * failImageDirectory: string - defines the folder where the fail images should be stored
- * * fullScreenshots: bool - crop the screenshot using the absolute element coordinates or relative to current viewport
- * *    (set false to use, for example with chromedriver)
- * * module: string - defines the module where the WebDriver is getted, by default WebDriver but you can set any
- * *    other module that extends WebDriver, like AngularJS
- * * widthOffset: int - defines different browser viewport width between OS, for example on Mac a screen width of 1300px
- *      is actually 1300px of viewport, but using xvfb and chrome 1300px is 1285px of viewport
+ * - maxDifference: float - the maximum difference between 2 images in percentages
+ * - automaticCleanup: bool - defines if the fail image folder should be cleaned up before a new test run is started.
+ * - referenceImageDirectory: string - defines the folder where the reference images should be stored
+ * - failImageDirectory: string - defines the folder where the fail images should be stored
+ * - fullScreenshots: bool - crop the screenshot using the absolute element coordinates or relative to current viewport
+ *   (set false to use, for example with chromedriver)
+ * - module: string - defines the module where the WebDriver is getted, by default WebDriver but you can set any
+ *   other module that extends WebDriver, like AngularJS
+ * - widthOffset: int - defines different browser viewport width between OS, for example on Mac a screen width of 1300px
+ *   is actually 1300px of viewport, but using xvfb and chrome 1300px is 1285px of viewport
  */
 class CssRegression extends Module
 {
@@ -58,11 +50,11 @@ class CssRegression extends Module
      * @var array
      */
     protected $config = [
-        'maxDifference'    => 0.01,
+        'maxDifference' => 0.01,
         'automaticCleanup' => true,
-        'fullScreenshots'  => true,
-        'module'           => 'WebDriver',
-        'widthOffset'      => 0,
+        'fullScreenshots' => true,
+        'module' => 'WebDriver',
+        'widthOffset' => 0,
     ];
 
     /**
@@ -91,10 +83,7 @@ class CssRegression extends Module
      * @var array
      */
     protected $hiddenSuiteElements;
-
-    /**
-     * Initialize the module after configuration has been loaded
-     */
+    
     public function _initialize()
     {
         $this->logger = new \Codeception\Lib\Console\Output([]);
@@ -120,8 +109,6 @@ class CssRegression extends Module
     }
 
     /**
-     * Before each suite
-     *
      * @param array $settings
      */
     public function _beforeSuite($settings = [])
@@ -131,8 +118,6 @@ class CssRegression extends Module
     }
 
     /**
-     * Before each scenario
-     *
      * @param TestCase $test
      */
     public function _before(TestCase $test)
@@ -142,22 +127,22 @@ class CssRegression extends Module
     }
 
     /**
-     * After each step
-     *
      * @param Step $step
      */
     public function _afterStep(Step $step)
     {
-        if ($step->getAction() === 'dontSeeDifferencesWithReferenceImage' && $this->config['automaticCleanup']) {
-            // cleanup the temp image
+        if ($step->getAction() === 'dontSeeDifferencesWithReferenceImage' 
+            && $this->config['automaticCleanup']
+        ) {
             $identifier = str_replace('"', '', explode(',', $step->getArgumentsAsString())[0]);
+            
             if (file_exists($this->moduleFileSystemUtil->getTempImagePath($identifier))) {
                 @unlink($this->moduleFileSystemUtil->getTempImagePath($identifier));
             }
         }
     }
     
-    protected function writeImage($image, $path)
+    protected function writeImage(\Imagick $image, $path)
     {
         $this->moduleFileSystemUtil->createDirectoryRecursive(
             dirname($path)
@@ -174,8 +159,12 @@ class CssRegression extends Module
      * @param string $selector
      * @throws ModuleException
      */
-    public function dontSeeDifferencesWithReferenceImage($imageIdentifier, $selector = 'body')
+    public function dontSeeDifferencesWithReferenceImage($selector = 'body', $imageIdentifier = null)
     {
+        if (!$imageIdentifier) {
+            
+        }
+        
         $elements = $this->webDriver->_findElements($selector);
 
         if (count($elements) == 0) {
@@ -203,7 +192,7 @@ class CssRegression extends Module
         if (!file_exists($referenceImagePath)) {
             $this->logger->writeln(
                 sprintf(
-                    '~ <comment>Generating reference image "%s" for css regression test...</comment>',
+                    '~ <comment>Generating reference image "%s" ...</comment>',
                     $imageIdentifier
                 )
             );
@@ -218,25 +207,35 @@ class CssRegression extends Module
 
             // Match image sizes to prevent Imagick exception
             $referenceImageSize = $referenceImage->getImageGeometry();
-            $imageSize          = $image->getImageGeometry();
-            $maxWidth           = max($referenceImageSize['width'], $imageSize['width']);
-            $maxHeight          = max($referenceImageSize['height'], $imageSize['height']);
+            $imageSize = $image->getImageGeometry();
+            
+            $maxWidth = max($referenceImageSize['width'], $imageSize['width']);
+            $maxHeight = max($referenceImageSize['height'], $imageSize['height']);
 
             $referenceImage->extentImage($maxWidth, $maxHeight, 0, 0);
             $image->extentImage($maxWidth, $maxHeight, 0, 0);
 
             try {
                 /** @var \Imagick $comparedImage */
-                list($comparedImage, $difference) = $referenceImage->compareImages($image,
-                    \Imagick::METRIC_MEANSQUAREERROR);
-
-                $calculatedDifferenceValue = round((float)round($difference, 4) * 100, 2);
-
-                $this->currentTestCase->getScenario()->comment(
-                    'Difference between reference and current image is around ' . $calculatedDifferenceValue . '%'
+                list($comparedImage, $difference) = $referenceImage->compareImages(
+                    $image,
+                    \Imagick::METRIC_MEANSQUAREERROR
                 );
 
-                if ($calculatedDifferenceValue > $this->config['maxDifference']) {
+                $difference = round((float)round($difference, 4) * 100, 2);
+                $messageTag = $difference > $this->config['maxDifference'] ? 'error' : 'info';
+
+                $this->logger->writeln(
+                    sprintf(
+                        '<%s>Visual difference detected for "%s": %s%%</%s>',
+                        $messageTag,
+                        $imageIdentifier,
+                        $difference,
+                        $messageTag
+                    )
+                );
+
+                if ($difference > $this->config['maxDifference']) {
                     $this->writeImage(
                         $image,
                         $this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'fail')
@@ -256,7 +255,7 @@ class CssRegression extends Module
             } catch (\ImagickException $e) {
                 $this->debug(
                     sprintf(
-                        "Could not campare %s and %s: %s",
+                        "Could not compare %s and %s: %s",
                         $referenceImage,
                         $image,
                         $e->getMessage()
@@ -269,7 +268,10 @@ class CssRegression extends Module
             }
         }
     }
-    
+
+    /**
+     * @param string $selector
+     */
     public function hideElements($selector)
     {
         $selectedElements = $this->webDriver->_findElements($selector);
@@ -291,11 +293,7 @@ class CssRegression extends Module
     }
 
     /**
-     * Will unhide the element for the given selector or unhide all elements that have been set to hidden before if
-     * no selector is given.
-     *
-     * @param string|null $selector The selector of the element that should be unhidden nor null if all elements should
-     * be unhidden that have been set to hidden before.
+     * @param string|null $selector
      */
     public function unhideElements($selector = null)
     {
@@ -326,8 +324,6 @@ class CssRegression extends Module
     }
 
     /**
-     * Create screenshot for an element
-     *
      * @param string $referenceImageName
      * @param RemoteWebElement $element
      * @return \Imagick
@@ -352,6 +348,7 @@ class CssRegression extends Module
             $element->getCoordinates()->{$takeCoordinatesFrom}()->getX(),
             $element->getCoordinates()->{$takeCoordinatesFrom}()->getY()
         );
+        
         $image->setImageFormat('png');
 
         $this->moduleFileSystemUtil->createDirectoryRecursive(
@@ -375,8 +372,6 @@ class CssRegression extends Module
     }
 
     /**
-     * The time when the module has been initalized
-     *
      * @return int timestamp
      */
     public function _getModuleInitTime()

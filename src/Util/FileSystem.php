@@ -30,7 +30,6 @@ class FileSystem
      */
     public function createDirectoryRecursive($path)
     {
-        // @todo UNIX ONLY?
         if (substr($path, 0, 1) !== '/') {
             $path = \Codeception\Configuration::projectDir() . $path;
         } elseif (!strstr($path, \Codeception\Configuration::projectDir())) {
@@ -59,21 +58,27 @@ class FileSystem
      */
     public function getReferenceImagePath($identifier, $sizeString)
     {
-        return $this->getReferenceImageDirectory()
-        . $sizeString . DIRECTORY_SEPARATOR
-        . $this->sanitizeFilename($identifier) . '.png';
+        $fileNameParts = array(
+            $this->sanitizeFilename($identifier),
+            'png'
+        );
+        
+        return $this->getPath(
+            $this->getReferenceImageDirectory(),
+            $sizeString,
+            implode('.', $fileNameParts)
+        );
     }
 
     /**
-     * Get the directory where reference images are stored
-     *
      * @return string
      */
     public function getReferenceImageDirectory()
     {
-        return \Codeception\Configuration::dataDir()
-        . rtrim($this->module->_getConfig('referenceImageDirectory'), DIRECTORY_SEPARATOR)
-        . DIRECTORY_SEPARATOR;
+        return $this->getPath(
+            \Codeception\Configuration::dataDir(),
+            $this->module->_getConfig('referenceImageDirectory')
+        );
     }
 
     /**
@@ -91,53 +96,47 @@ class FileSystem
      */
     public function sanitizeFilename($name)
     {
-        // remove non alpha numeric characters
-        $name = preg_replace('/[^A-Za-z0-9\._\- ]/', '', $name);
-
-        // capitalize first character of every word convert single spaces to underscrore
-        $name = str_replace(" ", "_", ucwords($name));
-
-        return $name;
+        return str_replace(
+            ' ',
+            '_',
+            preg_replace('/[^A-Za-z0-9\._\- ]/', '', $name)
+        );
     }
 
     /**
-     * Get path for the fail image with a suffix
-     *
      * @param string $identifier test identifier
+     * @param string $sizeString
      * @param string $suffix suffix added to the filename
      * @return string path to the fail image
      */
     public function getFailImagePath($identifier, $sizeString, $suffix = 'fail')
     {
-        $testName = $this->module->_getCurrentTestCase()->getMetadata()->getName();
-
         $fileNameParts = array(
             $suffix,
-            $identifier,
+            $this->sanitizeFilename($identifier),
             'png'
         );
 
-        return $this->getFailImageDirectory()
-        . $testName . DIRECTORY_SEPARATOR
-        . $sizeString . DIRECTORY_SEPARATOR
-        . $this->sanitizeFilename(implode('.', $fileNameParts));
+        return $this->getPath(
+            $this->getFailImageDirectory(),
+            $sizeString,
+            implode('.', $fileNameParts)
+        );
     }
 
     /**
-     * Get directory where fail images are stored
-     *
      * @return string
      */
     public function getFailImageDirectory()
     {
-        return \Codeception\Configuration::outputDir()
-        . rtrim($this->module->_getConfig('failImageDirectory'), DIRECTORY_SEPARATOR)
-        . DIRECTORY_SEPARATOR . $this->module->_getModuleInitTime() . DIRECTORY_SEPARATOR;
+        return $this->getPath(
+            \Codeception\Configuration::outputDir(),
+            $this->module->_getConfig('failImageDirectory'),
+            $this->module->_getModuleInitTime()
+        );
     }
 
     /**
-     * Get path to the temp image for the given identifier
-     *
      * @param string $identifier identifier for the test
      * @return string Path to the temp image
      */
@@ -149,7 +148,11 @@ class FileSystem
             $this->sanitizeFilename($identifier),
             'png'
         );
-        return $this->getTempDirectory() . implode('.', $fileNameParts);
+
+        return $this->getPath(
+            $this->getTempDirectory(),
+            implode('.', $fileNameParts)
+        );
     }
 
     /**
@@ -159,6 +162,19 @@ class FileSystem
      */
     public function getTempDirectory()
     {
-        return \Codeception\Configuration::outputDir() . 'debug' . DIRECTORY_SEPARATOR;
+        return $this->getPath(
+            \Codeception\Configuration::outputDir(), 
+            'debug'
+        );
+    }
+    
+    private function getPath()
+    {
+        return implode(
+            DIRECTORY_SEPARATOR, 
+            array_map(function ($item) {
+                return rtrim($item, DIRECTORY_SEPARATOR);
+            }, func_get_args())
+        );
     }
 }
