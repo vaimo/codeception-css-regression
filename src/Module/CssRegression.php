@@ -167,7 +167,7 @@ class CssRegression extends Module
     public function dontSeeDifferencesWithReferenceImage($selector = 'body', $identifier = null)
     {
         if (!$identifier) {
-            $identifier = 'capture-' . ++$this->captureCounter;
+            $identifier = 'capture_' . str_pad(++$this->captureCounter, 3, '0', STR_PAD_LEFT);
         }
         
         $elements = $this->webDriver->_findElements($selector);
@@ -189,7 +189,7 @@ class CssRegression extends Module
 
         $windowSizeString = $this->moduleFileSystemUtil->getCurrentWindowSizeString($this->webDriver);
 
-        $imageName = $identifier . '-' . $windowSizeString;
+        $imageName = $identifier . '---' . $windowSizeString;
         $contextPath = $this->runtimeUtils->getContextPath($this->currentTestCase);
         
         $referenceImagePath = $this->moduleFileSystemUtil->getReferenceImagePath($imageName, $contextPath); 
@@ -230,15 +230,17 @@ class CssRegression extends Module
                 $difference = round((float)round($difference, 4) * 100, 2);
                 $messageTag = $difference > $this->config['maxDifference'] ? 'error' : 'info';
 
-                $this->logger->writeln(
-                    sprintf(
-                        '<%s>Visual difference detected for "%s": %s%%</%s>',
-                        $messageTag,
-                        $identifier,
-                        $difference,
-                        $messageTag
-                    )
-                );
+                if ($difference) {
+                    $this->logger->writeln(
+                        sprintf(
+                            '<%s>Visual difference detected for "%s": %s%%</%s>',
+                            $messageTag,
+                            $identifier,
+                            $difference,
+                            $messageTag
+                        )
+                    );   
+                }
 
                 if ($difference > $this->config['maxDifference']) {
                     $this->writeImage(
