@@ -18,7 +18,7 @@ use Vaimo\CodeceptionCssRegression\Util\FileSystem;
  *
  * ``` yaml
  * extensions:
- *      - SaschaEgerer\CodeceptionCssRegression\Extension\CssRegressionReporter
+ *      - Vaimo\CodeceptionCssRegression\Extension\CssRegressionReporter
  * ```
  *
  * #### Configuration
@@ -28,7 +28,7 @@ use Vaimo\CodeceptionCssRegression\Util\FileSystem;
  * ``` yaml
  * extensions:
  *     config:
- *         SaschaEgerer\CodeceptionCssRegression\Extension\CssRegressionReporter
+ *         Vaimo\CodeceptionCssRegression\Extension\CssRegressionReporter
  *             templateFolder: /my/path/to/my/templates
  * ```
  *
@@ -41,6 +41,14 @@ class CssRegressionReporter extends \Codeception\Extension
         Events::SUITE_BEFORE => 'suiteInit'
     ];
 
+    /**
+     * @var \Vaimo\CodeceptionCssRegression\Util\Runtime
+     */
+    protected $runtimeUtils;
+
+    /**
+     * @var array
+     */
     protected $failedIdentifiers = [];
 
     /**
@@ -48,6 +56,9 @@ class CssRegressionReporter extends \Codeception\Extension
      */
     protected $fileSystemUtil;
 
+    /**
+     * @var array
+     */
     protected $config = [
         'templateFolder' => null
     ];
@@ -58,6 +69,8 @@ class CssRegressionReporter extends \Codeception\Extension
      */
     function __construct($config, $options)
     {
+        $this->runtimeUtils = new \Vaimo\CodeceptionCssRegression\Util\Runtime();
+        
         if (empty($this->config['templateFolder'])) {
             $this->config['templateFolder'] = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'Templates';
         }
@@ -75,7 +88,10 @@ class CssRegressionReporter extends \Codeception\Extension
     public function suiteInit(SuiteEvent $suiteEvent)
     {
         /** @var CssRegression $cssRegressionModule */
-        $cssRegressionModule = $this->getModule('\\SaschaEgerer\\CodeceptionCssRegression\\Module\\CssRegression');
+        $cssRegressionModule = $this->getModule(
+            \Vaimo\CodeceptionCssRegression\Module\CssRegression::class
+        );
+        
         $this->fileSystemUtil = new FileSystem($cssRegressionModule);
     }
 
@@ -112,12 +128,27 @@ class CssRegressionReporter extends \Codeception\Extension
             $identifier = $stepEvent->getStep()->getArguments()[0];
             $windowSize = $this->fileSystemUtil->getCurrentWindowSizeString($stepWebDriver);
 
+            $imageName = $identifier . '-' . $windowSize;
+            $contextPath = $this->runtimeUtils->getContextPath($stepEvent->getTest());
+            
             $this->failedIdentifiers[] = array(
                 'identifier' => $identifier,
                 'windowSize' => $windowSize,
-                'failImage' => base64_encode(file_get_contents($this->fileSystemUtil->getFailImagePath($identifier, $windowSize, 'fail'))),
-                'diffImage' => base64_encode(file_get_contents($this->fileSystemUtil->getFailImagePath($identifier, $windowSize, 'diff'))),
-                'referenceImage' => base64_encode(file_get_contents($this->fileSystemUtil->getReferenceImagePath($identifier, $windowSize)))
+                'failImage' => base64_encode(
+                    file_get_contents(
+                        $this->fileSystemUtil->getFailImagePath($imageName, $contextPath, 'fail')
+                    )
+                ),
+                'diffImage' => base64_encode(
+                    file_get_contents(
+                        $this->fileSystemUtil->getFailImagePath($imageName, $contextPath, 'diff')
+                    )
+                ),
+                'referenceImage' => base64_encode(
+                    file_get_contents(
+                        $this->fileSystemUtil->getReferenceImagePath($imageName, $contextPath)
+                    )
+                )
             );
         }
     }

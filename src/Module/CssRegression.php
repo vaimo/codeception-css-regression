@@ -35,6 +35,16 @@ use Vaimo\CodeceptionCssRegression\Util\FileSystem as RegressionFileSystem;
 class CssRegression extends Module
 {
     /**
+     * @var \Codeception\Lib\Console\Output
+     */
+    protected $logger;
+
+    /**
+     * @var \Vaimo\CodeceptionCssRegression\Util\Runtime
+     */
+    protected $runtimeUtils;
+    
+    /**
      * @var WebDriver
      */
     protected $webDriver = null;
@@ -87,6 +97,9 @@ class CssRegression extends Module
      */
     public function _initialize()
     {
+        $this->logger = new \Codeception\Lib\Console\Output([]);
+        $this->runtimeUtils = new \Vaimo\CodeceptionCssRegression\Util\Runtime();
+
         if (!class_exists('\\Imagick')) {
             throw new ModuleException(__CLASS__,
                 'Required class \\Imagick could not be found!
@@ -147,15 +160,15 @@ class CssRegression extends Module
             }
         }
     }
-
+    
     /**
      * Checks item in Memcached exists and the same as expected.
      *
-     * @param string $referenceImageIdentifier
+     * @param string $imageIdentifier
      * @param null|string $selector
      * @throws ModuleException
      */
-    public function seeNoDifferenceToReferenceImage($referenceImageIdentifier, $selector = null)
+    public function seeNoDifferenceToReferenceImage($imageIdentifier, $selector = null)
     {
         if ($selector === null) {
             $selector = 'body';
@@ -166,26 +179,38 @@ class CssRegression extends Module
         if (count($elements) == 0) {
             throw new ElementNotFound($selector);
         } elseif (count($elements) > 1) {
-            throw new ModuleException(__CLASS__,
-                'Multiple elements found for given selector "' . $selector . '" but need exactly one element!');
+            throw new ModuleException(
+                __CLASS__,
+                sprintf(
+                    'Multiple elements found for given selector "%s" but need exactly one element!',
+                    $selector
+                )
+            );
         }
+        
         /** @var RemoteWebElement $element */
-        $image = $this->_createScreenshot($referenceImageIdentifier, reset($elements));
+        $image = $this->_createScreenshot($imageIdentifier, reset($elements));
 
         $windowSizeString = $this->moduleFileSystemUtil->getCurrentWindowSizeString($this->webDriver);
-        $referenceImagePath = $this->moduleFileSystemUtil->getReferenceImagePath(
-            $referenceImageIdentifier,
-            $windowSizeString
-        );
-        if (!file_exists($referenceImagePath)) {
-            // Ensure that the target directory exists
-            $this->moduleFileSystemUtil->createDirectoryRecursive(dirname($referenceImagePath));
-            copy($image->getImageFilename(), $referenceImagePath);
 
-            $this->fail(
-                'Reference Image does not exist.
-                Test is skipeed but will now copy reference image to target directory...'
+        $imageName = $imageIdentifier . '-' . $windowSizeString;
+        $contextPath = $this->runtimeUtils->getContextPath($this->currentTestCase);
+        
+        $referenceImagePath = $this->moduleFileSystemUtil->getReferenceImagePath($imageName, $contextPath); 
+
+        if (!file_exists($referenceImagePath)) {
+            $this->logger->writeln(
+                sprintf(
+                    '~ <comment>Generating reference image "%s" for css regression test...</comment>',
+                    $imageIdentifier
+                )
             );
+            
+            $this->moduleFileSystemUtil->createDirectoryRecursive(
+                dirname($referenceImagePath)
+            );
+            
+            copy($image->getImageFilename(), $referenceImagePath);
         } else {
             $referenceImage = new \Imagick($referenceImagePath);
 
@@ -210,11 +235,11 @@ class CssRegression extends Module
                 );
 
                 if ($calculatedDifferenceValue > $this->config['maxDifference']) {
-                    $failImagePath = $this->moduleFileSystemUtil->getFailImagePath($referenceImageIdentifier, $windowSizeString, 'diff');
+                    $failImagePath = $this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'diff');
 
                     $this->moduleFileSystemUtil->createDirectoryRecursive(dirname($failImagePath));
 
-                    $image->writeImage($this->moduleFileSystemUtil->getFailImagePath($referenceImageIdentifier, $windowSizeString, 'fail'));
+                    $image->writeImage($this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'fail'));
                     $comparedImage->setImageFormat('png');
                     $comparedImage->writeImage($failImagePath);
                     $this->fail('Image does not match to the reference image.');
@@ -225,7 +250,7 @@ class CssRegression extends Module
             }
         }
     }
-
+    
     public function hideElements($selector)
     {
         $selectedElements = $this->webDriver->_findElements($selector);
