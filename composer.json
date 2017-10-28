@@ -1,25 +1,30 @@
 {
-  "name": "vaimo/codeception-css-regression",
-  "description": "CSS Regression Module for Codeception",
-  "type": "library",
-  "license": "GPL-2.0+",
-  "authors": [
-    {
-      "name": "Sascha Egerer",
-      "email": "sascha.egerer@gmail.com"
+    "name": "vaimo/codeception-css-regression",
+    "description": "CSS Regression Module for Codeception",
+    "type": "library",
+    "license": "GPL-2.0+",
+    "authors": [
+        {
+            "name": "Sascha Egerer",
+            "email": "sascha.egerer@gmail.com"
+        },
+        {
+            "name": "Carlos Mendieta",
+            "email": "mendicm@gmail.com"
+        },
+        {
+            "name": "Allan Paiste",
+            "email": "allan.paiste@gmail.com"
+        }
+    ],
+    "require": {
+        "codeception/codeception": "*",
+        "vaimo/image-difference": "^1.1.0",
+        "php": ">=5.4.0"
     },
-    {
-      "name": "Carlos Mendieta",
-      "email": "mendicm@gmail.com"
+    "autoload": {
+        "psr-4": {
+            "Vaimo\\CodeceptionCssRegression\\": "src"
+        }
     }
-  ],
-  "require": {
-    "codeception/codeception": "*",
-    "php": ">=5.4.0"
-  },
-  "autoload": {
-    "psr-4": {
-      "Vaimo\\CodeceptionCssRegression\\": "src"
-    }
-  }
 }
