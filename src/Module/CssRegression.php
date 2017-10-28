@@ -13,7 +13,9 @@ namespace Vaimo\CodeceptionCssRegression\Module;
  *   other module that extends WebDriver, like AngularJS
  * - widthOffset: int - defines different browser viewport width between OS, for example on Mac a screen width of 1300px
  *   is actually 1300px of viewport, but using xvfb and chrome 1300px is 1285px of viewport
- * - diffColor: The color of the diff overlay
+ * - colorContent: The color of the diff overlay on content differences
+ * - colorSize: The color of the image size difference indicator (in case compared image has bigger dimensions than
+ *   the reference)
  */
 class CssRegression extends \Codeception\Module
 {
@@ -31,7 +33,8 @@ class CssRegression extends \Codeception\Module
         'fullScreenshots' => true,
         'module' => 'WebDriver',
         'widthOffset' => 0,
-        'diffColor' => 'BF00FF'
+        'colorContent' => 'EE0000C7',
+        'colorSize' => '88888866'
     ];
 
     /**
@@ -60,7 +63,7 @@ class CssRegression extends \Codeception\Module
     protected $suitePath = '';
 
     /**
-     * @var \Codeception\TestCase
+     * @var \Codeception\TestInterface
      */
     protected $currentTestCase;
 
@@ -88,6 +91,11 @@ class CssRegression extends \Codeception\Module
      * @var int
      */
     private $captureCounter = 0;
+
+    private $colorConfigMap = [
+        'content' => 'colorContent',
+        'size' => 'colorSize'
+    ];
 
     public function _initialize()
     {
@@ -197,19 +205,48 @@ class CssRegression extends \Codeception\Module
 
             copy($imagePath, $referenceImagePath);
         } else {
-            $image1 = new \Undemanding\Difference\Image($referenceImagePath);
-            $image2 = new \Undemanding\Difference\Image($imagePath);
+            /**
+             * Diff image :: calculate
+             */
+            $image = new \Undemanding\Difference\Image($imagePath);
+            $referenceImage = new \Undemanding\Difference\Image($referenceImagePath);
 
-            $difference = $image1->difference(
-                $image2,
+            $difference = $image->difference(
+                $referenceImage,
                 new \Undemanding\Difference\Method\EuclideanDistance()
             );
 
-            $percentage = round($difference->percentage(), 2);
+            $maxWidth = max($image->getWidth(), $referenceImage->getWidth());
+            $maxHeight = max($image->getHeight(), $referenceImage->getHeight());
 
-            $messageTag = $percentage > $this->config['maxDifference'] ? 'error' : 'info';
+            $extraBoundaries = [];
+            $extraBoundaries[] = [
+                'left' => min($image->getWidth(), $referenceImage->getWidth()),
+                'top' => 0,
+                'right' => $maxWidth,
+                'bottom' => min($image->getHeight(), $referenceImage->getHeight()),
+                'type' => 'size'
+            ];
 
-            if ($percentage) {
+            $extraBoundaries[] = [
+                'left' => 0,
+                'top' => min($image->getHeight(), $referenceImage->getHeight()),
+                'right' => $maxWidth,
+                'bottom' => $maxHeight,
+                'type' => 'size'
+            ];
+
+            $diffArea = 0;
+            foreach ($extraBoundaries as $boundary) {
+                $diffArea += ($boundary['right'] - $boundary['left']) * ($boundary['bottom'] - $boundary['top']);
+            }
+
+            $areaDiff = 100 * $diffArea / ($maxWidth * $maxHeight);
+            $contentDiff = $difference->percentage() * (100 - $areaDiff) / 100;
+
+            if ($percentage = round($contentDiff + $areaDiff, 2)) {
+                $messageTag = $percentage > $this->config['maxDifference'] ? 'error' : 'info';
+
                 $this->logger->writeln(
                     sprintf(
                         '<%s>Visual difference detected for "%s": %s%%</%s>',
@@ -221,56 +258,80 @@ class CssRegression extends \Codeception\Module
                 );
             }
 
-            if ($percentage > $this->config['maxDifference']) {
-                $connectedImages = new \Undemanding\Difference\ConnectedDifferences($difference);
-                $diffAreas = $connectedImages->withJoinedBoundaries()->boundaries();
+            /**
+             * Diff image :: evaluate
+             */
+            if ($percentage <= $this->config['maxDifference']) {
+                return;
+            }
 
-                /**
-                 * Merge images
-                 */
-                $failImagePath = $this->fileSystem->getFailImagePath($imageName, $contextPath, 'fail');
-                $diffImagePath = $this->fileSystem->getFailImagePath($imageName, $contextPath, 'diff');
+            /**
+             * Diff image :: create
+             */
+            $connectedImages = new \Undemanding\Difference\ConnectedDifferences($difference);
 
-                $this->fileSystem->createDirectoryRecursive(dirname($failImagePath));
-                $this->fileSystem->createDirectoryRecursive(dirname($diffImagePath));
+            $diffAreas = array_merge($connectedImages->withJoinedBoundaries()->boundaries(), $extraBoundaries);
 
-                copy($imagePath, $failImagePath);
+            $failImagePath = $this->fileSystem->getFailImagePath($imageName, $contextPath, 'fail');
+            $diffImagePath = $this->fileSystem->getFailImagePath($imageName, $contextPath, 'diff');
 
-                $image1 = \Grafika\Gd\Image::createFromFile($imagePath);
-                $image2 = \Grafika\Gd\Image::createFromFile($referenceImagePath);
+            $this->fileSystem->createDirectoryRecursive(dirname($failImagePath));
+            $this->fileSystem->createDirectoryRecursive(dirname($diffImagePath));
 
-                $this->imageEditor->blend($image1, $image2, 'normal', 0.7);
+            copy($imagePath, $failImagePath);
 
-                /**
-                 * Draw out differences
-                 */
-                $handle = $image1->getCore();
+            $diffImage = \Grafika\Gd\Image::createBlank($maxWidth, $maxHeight);
+            $grImage = \Grafika\Gd\Image::createFromCore($image->getCore());
+            $grReferenceImage = \Grafika\Gd\Image::createFromCore($referenceImage->getCore());
 
-                list($r, $g, $b) = sscanf($this->config['diffColor'], "%02x%02x%02x");
-                $overlayColor = imagecolorallocatealpha($handle, $r, $g, $b, 100);
+            $diffImage->fullAlphaMode(true);
+            $grImage->fullAlphaMode(true);
+            $grReferenceImage->fullAlphaMode(true);
 
-                $polygonPointMap = ['left', 'top', 'right', 'top', 'right', 'bottom', 'left', 'bottom'];
+            $this->imageEditor->fill($diffImage, new \Grafika\Color('FFFFFF'));
+            $this->imageEditor->blend($diffImage, $grImage, 'normal', 0.8);
+            $this->imageEditor->blend($diffImage, $grReferenceImage, 'normal', 0.8);
+            $this->imageEditor->blend($diffImage, $grImage, 'normal', 0.4);
+            $this->imageEditor->blend($diffImage, $grReferenceImage, 'normal', 0.1);
 
-                foreach ($diffAreas as $boundary) {
-                    imagefilledpolygon(
-                        $handle,
-                        array_map(function ($key) use ($boundary) {
-                            return $boundary[$key];
-                        }, $polygonPointMap),
-                        count($polygonPointMap) / 2,
-                        $overlayColor
-                    );
-                }
+            /**
+             * Diff image :: highlight differences
+             */
+            $handle = $diffImage->getCore();
 
-                $this->imageEditor->save($image1, $diffImagePath);
+            $boundaryColors = [];
+            foreach ($this->colorConfigMap as $type => $name) {
+                list($red, $green, $blue, $alpha) = sscanf($this->config[$name], "%02x%02x%02x%02x");
+                $boundaryColors[$type] = imagecolorallocatealpha($handle, $red, $green, $blue, $alpha * 127 / 255);
+            }
 
-                imagedestroy($image1->getCore());
-                imagedestroy($image2->getCore());
+            $polygonPointMap = ['left', 'top', 'right', 'top', 'right', 'bottom', 'left', 'bottom'];
 
-                $this->fail(
-                    sprintf('Page content for "%s" differs from reference image', $selector)
+            foreach ($diffAreas as $boundary) {
+                $boundaryType = isset($boundary['type']) ? $boundary['type'] : 'content';
+
+                imagefilledpolygon(
+                    $handle,
+                    array_map(function ($key) use ($boundary) {
+                        return $boundary[$key];
+                    }, $polygonPointMap),
+                    count($polygonPointMap) / 2,
+                    $boundaryColors[$boundaryType]
                 );
             }
+
+            $this->imageEditor->save($diffImage, $diffImagePath);
+
+            imagedestroy($image->getCore());
+            imagedestroy($referenceImage->getCore());
+            imagedestroy($diffImage->getCore());
+
+            $this->fail(
+                sprintf('Page content for "%s" differs from reference image', $selector)
+            );
+
+            $image->reset();
+            $referenceImage->reset();
         }
     }
 
