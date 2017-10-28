@@ -19,12 +19,18 @@
     ],
     "require": {
         "codeception/codeception": "*",
-        "vaimo/image-difference": "^1.1.0",
+        "vaimo/image-difference": "^1.1.1",
+        "kosinix/grafika": "^2.0.8",
         "php": ">=5.4.0"
     },
     "autoload": {
         "psr-4": {
             "Vaimo\\CodeceptionCssRegression\\": "src"
         }
-    }
+    },
+    "keywords": [
+        "visual differences",
+        "regression tests",
+        "native php gd image usage"
+    ]
 }

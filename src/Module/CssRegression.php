@@ -55,6 +55,7 @@ class CssRegression extends Module
         'fullScreenshots' => true,
         'module' => 'WebDriver',
         'widthOffset' => 0,
+        'diffColor' => 'BF00FF'
     ];
 
     /**
@@ -85,12 +86,24 @@ class CssRegression extends Module
     protected $hiddenSuiteElements;
 
     /**
+     * @var \Grafika\Gd\Editor
+     */
+    private $imageEditor;
+
+    /**
+     * @var array
+     */
+    private $tmpImagePaths = [];
+
+    /**
      * @var int
      */
     private $captureCounter = 0;
     
     public function _initialize()
     {
+        $this->imageEditor = new \Grafika\Gd\Editor();
+
         $this->logger = new \Codeception\Lib\Console\Output([]);
         $this->runtimeUtils = new \Vaimo\CodeceptionCssRegression\Util\Runtime();
 
@@ -115,38 +128,27 @@ class CssRegression extends Module
         $this->hiddenSuiteElements = array();
     }
 
-    /**
-     * @param TestCase $test
-     */
     public function _before(TestCase $test)
     {
         $this->currentTestCase = $test;
         $this->webDriver = $this->getModule($this->config['module']);
     }
 
-    /**
-     * @param Step $step
-     */
     public function _afterStep(Step $step)
     {
-        if ($step->getAction() === 'dontSeeDifferencesWithReferenceImage' 
-            && $this->config['automaticCleanup']
-        ) {
-            $identifier = str_replace('"', '', explode(',', $step->getArgumentsAsString())[0]);
-            
-            if (file_exists($this->moduleFileSystemUtil->getTempImagePath($identifier))) {
-                @unlink($this->moduleFileSystemUtil->getTempImagePath($identifier));
-            }
+        if ($step->getAction() !== 'dontSeeDifferencesWithReferenceImage' || !$this->config['automaticCleanup']) {
+            return;
         }
-    }
-    
-    protected function copyImage($imagePath, $path)
-    {
-        $this->moduleFileSystemUtil->createDirectoryRecursive(
-            dirname($path)
-        );
 
-        copy($imagePath, $path);
+        foreach ($this->tmpImagePaths as $imagePath) {
+            if (!file_exists($imagePath)) {
+                continue;
+            }
+
+            @unlink($imagePath);
+        }
+
+        $this->tmpImagePaths = [];
     }
     
     /**
@@ -178,7 +180,7 @@ class CssRegression extends Module
         }
         
         /** @var RemoteWebElement $element */
-        $imagePath = $this->_createScreenshot($identifier, reset($elements));
+        $imagePath = $this->_captureImage($identifier, reset($elements));
 
         $windowSizeString = $this->moduleFileSystemUtil->getCurrentWindowSizeString($this->webDriver);
 
@@ -226,40 +228,55 @@ class CssRegression extends Module
             }
 
             if ($percentage > $this->config['maxDifference']) {
-                $this->copyImage(
-                    $imagePath,
-                    $this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'fail')
-                );
+                $connectedImages = new \Undemanding\Difference\ConnectedDifferences($difference);
+                $diffAreas = $connectedImages->withJoinedBoundaries()->boundaries();
 
-                $connected1 = new \Undemanding\Difference\ConnectedDifferences($difference);
-                $handle = imagecreatefrompng($imagePath);
-                $color = imagecolorallocate($handle, 255, 0, 0);
+                /**
+                 * Merge images
+                 */
+                $failImagePath = $this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'fail');
+                $diffImagePath = $this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'diff');
 
-                foreach ($connected1->boundaries() as $boundary) {
-                    imagerectangle(
+                $this->moduleFileSystemUtil->createDirectoryRecursive(dirname($failImagePath));
+                $this->moduleFileSystemUtil->createDirectoryRecursive(dirname($diffImagePath));
+
+                copy($imagePath, $failImagePath);
+
+                $image1 = \Grafika\Gd\Image::createFromFile($imagePath);
+                $image2 = \Grafika\Gd\Image::createFromFile($referenceImagePath);
+
+                $this->imageEditor->blend($image1, $image2, 'normal', 0.7);
+
+                /**
+                 * Draw out differences
+                 */
+                $handle = $image1->getCore();
+
+                list($r, $g, $b) = sscanf($this->config['diffColor'], "%02x%02x%02x");
+                $overlayColor = imagecolorallocatealpha($handle, $r, $g, $b, 100);
+
+                $polygonPointMap = ['left', 'top', 'right', 'top', 'right', 'bottom', 'left', 'bottom'];
+
+                foreach ($diffAreas as $boundary) {
+                    imagefilledpolygon(
                         $handle,
-                        $boundary['left'],
-                        $boundary['top'],
-                        $boundary['right'],
-                        $boundary['bottom'],
-                        $color
+                        array_map(function ($key) use ($boundary) {
+                            return $boundary[$key];
+                        }, $polygonPointMap),
+                        count($polygonPointMap) / 2,
+                        $overlayColor
                     );
                 }
 
-                $diffPath = $this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'diff');
+                $this->imageEditor->save($image1, $diffImagePath);
 
-                $this->moduleFileSystemUtil->createDirectoryRecursive(
-                    dirname($diffPath)
-                );
-
-                imagepng($handle, $diffPath);
-                imagedestroy($handle);
+                imagedestroy($image1->getCore());
+                imagedestroy($image2->getCore());
 
                 $this->fail(
                     sprintf('Page content for "%s" differs from reference image', $selector)
                 );
             }
-
         }
     }
 
@@ -322,46 +339,41 @@ class CssRegression extends Module
      * @param RemoteWebElement $element
      * @return string
      */
-    protected function _createScreenshot($referenceImageName, RemoteWebElement $element)
+    protected function _captureImage($referenceImageName, RemoteWebElement $element)
     {
         if (!$this->config['fullScreenshots']) {
-            // Try scrolling the element into the view port
             $element->getLocationOnScreenOnceScrolledIntoView();
         }
 
         $tempImagePath = $this->moduleFileSystemUtil->getTempImagePath($referenceImageName);
 
-        $this->moduleFileSystemUtil->createDirectoryRecursive(
-            dirname($tempImagePath)
-        );
+        $this->moduleFileSystemUtil->createDirectoryRecursive(dirname($tempImagePath));
 
         $this->webDriver->webDriver->takeScreenshot($tempImagePath);
 
         $image = imagecreatefrompng($tempImagePath);
 
+        $elementCoordinates = $element->getCoordinates();
+
         if ($this->config['fullScreenshots']) {
-            $posX = $element->getCoordinates()->onPage()->getX();
-            $posY = $element->getCoordinates()->onPage()->getY();
+            $elementPosition = $elementCoordinates->onPage();
         } else {
-            $posX = $element->getCoordinates()->inViewPort()->getX();
-            $posY = $element->getCoordinates()->inViewPort()->getY();
+            $elementPosition = $elementCoordinates->inViewPort();
         }
 
         $elementSize = $element->getSize();
 
         $croppedImage = imagecrop($image, [
-            'x' => $posX,
-            'y' => $posY,
+            'x' => $elementPosition->getX(),
+            'y' => $elementPosition->getY(),
             'width' => $elementSize->getWidth(),
-            'height' => $elementSize->getHeight()]
-        );
-
-        $this->moduleFileSystemUtil->createDirectoryRecursive(
-            dirname($tempImagePath)
-        );
+            'height' => $elementSize->getHeight()
+        ]);
 
         imagepng($croppedImage, $tempImagePath);
         imagedestroy($croppedImage);
+
+        $this->tmpImagePaths[] = $tempImagePath;
 
         return $tempImagePath;
     }

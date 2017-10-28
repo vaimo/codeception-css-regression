@@ -1,7 +1,8 @@
 Codeception Regression Test module
 ==================================
 
-Allows base image creation and element output comparison against the base image in later test runs.
+Allows base image creation and element output comparison against the base image in later test runs. The module uses
+standard PHP image processing library GD and does not require any additional extensions to be installed in the system.  
 
 Install
 -------
@@ -25,6 +26,7 @@ modules:
             automaticCleanup: true
             module: WebDriver
             fullScreenshots: false
+            diffColor: 'BF00FF'
 ```
 
 Usage
@@ -35,4 +37,3 @@ $I->amOnPage('/');
 $I->hideElements('.socialMediaButton');
 $I->dontSeeDifferencesWithReferenceImage('#news-article', 'News article');
 ```
-
