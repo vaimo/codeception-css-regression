@@ -1,33 +1,30 @@
 <?php
 namespace Vaimo\CodeceptionCssRegression\Util;
 
-use Codeception\Module;
-use Vaimo\CodeceptionCssRegression\Module\CssRegression;
-
-/**
- * Provide some methods for filesystem related actions
- */
 class FileSystem
 {
 
     /**
-     * @var CssRegression
+     * @var \Vaimo\CodeceptionCssRegression\Module\CssRegression
      */
     protected $module;
 
     /**
-     * @param CssRegression $module
+     * @var string
      */
-    public function __construct(CssRegression $module)
-    {
-        $this->module = $module;
-    }
+    protected $currentRunDirectory;
 
     /**
-     * Create a directory recursive
-     *
-     * @param $path
+     * @param \Vaimo\CodeceptionCssRegression\Module\CssRegression $module
      */
+    public function __construct(
+        \Vaimo\CodeceptionCssRegression\Module\CssRegression $module,
+        $currentRunDirectory
+    ) {
+        $this->module = $module;
+        $this->currentRunDirectory = $currentRunDirectory;
+    }
+
     public function createDirectoryRecursive($path)
     {
         if (substr($path, 0, 1) !== '/') {
@@ -50,12 +47,6 @@ class FileSystem
         }
     }
 
-    /**
-     * Get path for the reference image
-     *
-     * @param string $identifier
-     * @return string path to the reference image
-     */
     public function getReferenceImagePath($identifier, $sizeString)
     {
         $fileNameParts = array(
@@ -70,9 +61,6 @@ class FileSystem
         );
     }
 
-    /**
-     * @return string
-     */
     public function getReferenceImageDirectory()
     {
         return $this->getPath(
@@ -81,19 +69,13 @@ class FileSystem
         );
     }
 
-    /**
-     * @return string
-     */
-    public function getCurrentWindowSizeString(Module\WebDriver $webDriver)
+    public function getCurrentWindowSizeString(\Codeception\Module\WebDriver $webDriver)
     {
         $windowSize = $webDriver->webDriver->manage()->window()->getSize();
+
         return ($windowSize->getWidth() - $this->module->_getConfig('widthOffset')) . 'x' . $windowSize->getHeight();
     }
 
-    /**
-     * @param $name
-     * @return string
-     */
     public function sanitizeFilename($name)
     {
         return str_replace(
@@ -103,12 +85,6 @@ class FileSystem
         );
     }
 
-    /**
-     * @param string $identifier test identifier
-     * @param string $sizeString
-     * @param string $suffix suffix added to the filename
-     * @return string path to the fail image
-     */
     public function getFailImagePath($identifier, $sizeString, $suffix = 'fail')
     {
         $fileNameParts = array(
@@ -124,27 +100,20 @@ class FileSystem
         );
     }
 
-    /**
-     * @return string
-     */
     public function getFailImageDirectory()
     {
         return $this->getPath(
             \Codeception\Configuration::outputDir(),
             $this->module->_getConfig('failImageDirectory'),
-            $this->module->_getModuleInitTime()
+            $this->currentRunDirectory
         );
     }
 
-    /**
-     * @param string $identifier identifier for the test
-     * @return string Path to the temp image
-     */
-    public function getTempImagePath($identifier)
+    public function getTempImagePath($identifier, $sizeString)
     {
         $fileNameParts = array(
-            $this->module->_getModuleInitTime(),
-            $this->getCurrentWindowSizeString($this->module->_getWebdriver()),
+            $this->currentRunDirectory,
+            $sizeString,
             $this->sanitizeFilename($identifier),
             'png'
         );
@@ -155,11 +124,6 @@ class FileSystem
         );
     }
 
-    /**
-     * Get the directory to store temporary files
-     *
-     * @return string
-     */
     public function getTempDirectory()
     {
         return $this->getPath(

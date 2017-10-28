@@ -1,16 +1,6 @@
 <?php
 namespace Vaimo\CodeceptionCssRegression\Module;
 
-use Codeception\Exception\ElementNotFound;
-use Codeception\Exception\ModuleException;
-use Codeception\Module;
-use Codeception\Module\WebDriver;
-use Codeception\Step;
-use Codeception\TestCase;
-use Codeception\Util\FileSystem;
-use Facebook\WebDriver\Remote\RemoteWebElement;
-use Vaimo\CodeceptionCssRegression\Util\FileSystem as RegressionFileSystem;
-
 /**
  * ## Configuration
  * - maxDifference: float - the maximum difference between 2 images in percentages
@@ -23,28 +13,14 @@ use Vaimo\CodeceptionCssRegression\Util\FileSystem as RegressionFileSystem;
  *   other module that extends WebDriver, like AngularJS
  * - widthOffset: int - defines different browser viewport width between OS, for example on Mac a screen width of 1300px
  *   is actually 1300px of viewport, but using xvfb and chrome 1300px is 1285px of viewport
+ * - diffColor: The color of the diff overlay
  */
-class CssRegression extends Module
+class CssRegression extends \Codeception\Module
 {
     /**
-     * @var \Codeception\Lib\Console\Output
+     * @var int Timestamp when the suite was initialized
      */
-    protected $logger;
-
-    /**
-     * @var \Vaimo\CodeceptionCssRegression\Util\Runtime
-     */
-    protected $runtimeUtils;
-    
-    /**
-     * @var WebDriver
-     */
-    protected $webDriver = null;
-
-    /**
-     * @var array
-     */
-    protected $requiredFields = ['referenceImageDirectory', 'failImageDirectory'];
+    protected static $moduleInitTime = 0;
 
     /**
      * @var array
@@ -59,28 +35,41 @@ class CssRegression extends Module
     ];
 
     /**
+     * @var \Codeception\Lib\Console\Output
+     */
+    protected $logger;
+
+    /**
+     * @var \Vaimo\CodeceptionCssRegression\Util\Runtime
+     */
+    protected $runtimeUtils;
+
+    /**
+     * @var \Codeception\Module\WebDriver
+     */
+    protected $webDriver = null;
+
+    /**
+     * @var array
+     */
+    protected $requiredFields = ['referenceImageDirectory', 'failImageDirectory'];
+
+    /**
      * @var string
      */
     protected $suitePath = '';
 
     /**
-     * @var int Timestamp when the suite was initialized
-     */
-    protected static $moduleInitTime = 0;
-
-    /**
-     * @var TestCase
+     * @var \Codeception\TestCase
      */
     protected $currentTestCase;
 
     /**
-     * @var RegressionFileSystem
+     * @var \Vaimo\CodeceptionCssRegression\Util\FileSystem
      */
-    protected $moduleFileSystemUtil;
+    protected $fileSystem;
 
     /**
-     * Elements that have been hidden for the current suite
-     *
      * @var array
      */
     protected $hiddenSuiteElements;
@@ -99,42 +88,51 @@ class CssRegression extends Module
      * @var int
      */
     private $captureCounter = 0;
-    
+
     public function _initialize()
     {
-        $this->imageEditor = new \Grafika\Gd\Editor();
+        $isFirstInitialize = self::$moduleInitTime === 0;
 
+        if ($isFirstInitialize) {
+            self::$moduleInitTime = time();
+        }
+
+        $this->imageEditor = new \Grafika\Gd\Editor();
         $this->logger = new \Codeception\Lib\Console\Output([]);
         $this->runtimeUtils = new \Vaimo\CodeceptionCssRegression\Util\Runtime();
+        $this->fileSystem = new \Vaimo\CodeceptionCssRegression\Util\FileSystem($this, $this->_getInitTime());
 
-        $this->moduleFileSystemUtil = new RegressionFileSystem($this);
-
-        if (self::$moduleInitTime === 0) {
-            self::$moduleInitTime = time();
-
-            if ($this->config['automaticCleanup'] === true && is_dir($this->moduleFileSystemUtil->getFailImageDirectory())) {
-                // cleanup fail image directory
-                FileSystem::doEmptyDir($this->moduleFileSystemUtil->getFailImageDirectory());
-            }
+        if (!$isFirstInitialize) {
+            return;
         }
+
+        if (!$this->config['automaticCleanup']) {
+            return;
+        }
+
+
+        if (!is_dir($this->fileSystem->getFailImageDirectory())) {
+            return;
+        }
+
+        \Codeception\Util\FileSystem::doEmptyDir(
+            $this->fileSystem->getFailImageDirectory()
+        );
     }
 
-    /**
-     * @param array $settings
-     */
     public function _beforeSuite($settings = [])
     {
         $this->suitePath = $settings['path'];
-        $this->hiddenSuiteElements = array();
+        $this->hiddenSuiteElements = [];
     }
 
-    public function _before(TestCase $test)
+    public function _before(\Codeception\TestInterface $test)
     {
         $this->currentTestCase = $test;
         $this->webDriver = $this->getModule($this->config['module']);
     }
 
-    public function _afterStep(Step $step)
+    public function _afterStep(\Codeception\Step $step)
     {
         if ($step->getAction() !== 'dontSeeDifferencesWithReferenceImage' || !$this->config['automaticCleanup']) {
             return;
@@ -150,27 +148,24 @@ class CssRegression extends Module
 
         $this->tmpImagePaths = [];
     }
-    
-    /**
-     * Checks if there are any visual changes to the page when compared to previously 
-     * captured reference image.   
-     *
-     * @param string $identifier
-     * @param string $selector
-     * @throws ModuleException
-     */
+
+    public function _getInitTime()
+    {
+        return self::$moduleInitTime;
+    }
+
     public function dontSeeDifferencesWithReferenceImage($selector = 'body', $identifier = null)
     {
         if (!$identifier) {
             $identifier = 'capture_' . str_pad(++$this->captureCounter, 3, '0', STR_PAD_LEFT);
         }
-        
+
         $elements = $this->webDriver->_findElements($selector);
 
         if (count($elements) == 0) {
-            throw new ElementNotFound($selector);
+            throw new \Codeception\Exception\ElementNotFound($selector);
         } elseif (count($elements) > 1) {
-            throw new ModuleException(
+            throw new \Codeception\Exception\ModuleException(
                 __CLASS__,
                 sprintf(
                     'Multiple elements found for given selector "%s" but need exactly one element!',
@@ -178,16 +173,15 @@ class CssRegression extends Module
                 )
             );
         }
-        
-        /** @var RemoteWebElement $element */
+
         $imagePath = $this->_captureImage($identifier, reset($elements));
 
-        $windowSizeString = $this->moduleFileSystemUtil->getCurrentWindowSizeString($this->webDriver);
+        $windowSizeString = $this->fileSystem->getCurrentWindowSizeString($this->webDriver);
 
         $imageName = $identifier . '---' . $windowSizeString;
         $contextPath = $this->runtimeUtils->getContextPath($this->currentTestCase);
-        
-        $referenceImagePath = $this->moduleFileSystemUtil->getReferenceImagePath($imageName, $contextPath); 
+
+        $referenceImagePath = $this->fileSystem->getReferenceImagePath($imageName, $contextPath);
 
         if (!file_exists($referenceImagePath)) {
             $this->logger->writeln(
@@ -196,11 +190,11 @@ class CssRegression extends Module
                     $identifier
                 )
             );
-            
-            $this->moduleFileSystemUtil->createDirectoryRecursive(
+
+            $this->fileSystem->createDirectoryRecursive(
                 dirname($referenceImagePath)
             );
-            
+
             copy($imagePath, $referenceImagePath);
         } else {
             $image1 = new \Undemanding\Difference\Image($referenceImagePath);
@@ -234,11 +228,11 @@ class CssRegression extends Module
                 /**
                  * Merge images
                  */
-                $failImagePath = $this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'fail');
-                $diffImagePath = $this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'diff');
+                $failImagePath = $this->fileSystem->getFailImagePath($imageName, $contextPath, 'fail');
+                $diffImagePath = $this->fileSystem->getFailImagePath($imageName, $contextPath, 'diff');
 
-                $this->moduleFileSystemUtil->createDirectoryRecursive(dirname($failImagePath));
-                $this->moduleFileSystemUtil->createDirectoryRecursive(dirname($diffImagePath));
+                $this->fileSystem->createDirectoryRecursive(dirname($failImagePath));
+                $this->fileSystem->createDirectoryRecursive(dirname($diffImagePath));
 
                 copy($imagePath, $failImagePath);
 
@@ -280,9 +274,6 @@ class CssRegression extends Module
         }
     }
 
-    /**
-     * @param string $selector
-     */
     public function hideElements($selector)
     {
         $selectedElements = $this->webDriver->_findElements($selector);
@@ -303,10 +294,7 @@ class CssRegression extends Module
         }
     }
 
-    /**
-     * @param string|null $selector
-     */
-    public function unhideElements($selector = null)
+    public function showElements($selector = null)
     {
         if ($selector === null) {
             foreach ($this->hiddenSuiteElements as $elementData) {
@@ -334,20 +322,18 @@ class CssRegression extends Module
         }
     }
 
-    /**
-     * @param string $referenceImageName
-     * @param RemoteWebElement $element
-     * @return string
-     */
-    protected function _captureImage($referenceImageName, RemoteWebElement $element)
+    protected function _captureImage($referenceImageName, \Facebook\WebDriver\Remote\RemoteWebElement $element)
     {
         if (!$this->config['fullScreenshots']) {
             $element->getLocationOnScreenOnceScrolledIntoView();
         }
 
-        $tempImagePath = $this->moduleFileSystemUtil->getTempImagePath($referenceImageName);
+        $tempImagePath = $this->fileSystem->getTempImagePath(
+            $referenceImageName,
+            $this->fileSystem->getCurrentWindowSizeString($this->webDriver)
+        );
 
-        $this->moduleFileSystemUtil->createDirectoryRecursive(dirname($tempImagePath));
+        $this->fileSystem->createDirectoryRecursive(dirname($tempImagePath));
 
         $this->webDriver->webDriver->takeScreenshot($tempImagePath);
 
@@ -376,37 +362,5 @@ class CssRegression extends Module
         $this->tmpImagePaths[] = $tempImagePath;
 
         return $tempImagePath;
-    }
-
-    /**
-     * @return null|TestCase
-     */
-    public function _getCurrentTestCase()
-    {
-        if ($this->currentTestCase instanceof TestCase) {
-            return $this->currentTestCase;
-        }
-        return null;
-    }
-
-    /**
-     * @return int timestamp
-     */
-    public function _getModuleInitTime()
-    {
-        return self::$moduleInitTime;
-    }
-
-    /**
-     * @return string
-     */
-    public function _getSuitePath()
-    {
-        return $this->suitePath;
-    }
-
-    public function _getWebdriver()
-    {
-        return $this->webDriver;
     }
 }

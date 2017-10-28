@@ -3,7 +3,7 @@ namespace Vaimo\CodeceptionCssRegression\Util;
 
 class Runtime
 {
-    public function getContextPath(\Codeception\TestCase $testCase)
+    public function getContextPath(\Codeception\TestInterface $testCase)
     {
         $testsRoot = exec(
             sprintf('cd %s && pwd', \Codeception\Configuration::testsDir())

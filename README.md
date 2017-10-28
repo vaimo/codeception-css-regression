@@ -33,6 +33,7 @@ Usage
 -----
 
 ```php
+<?php
 $I->amOnPage('/');
 $I->hideElements('.socialMediaButton');
 $I->dontSeeDifferencesWithReferenceImage('#news-article', 'News article');

@@ -6,8 +6,6 @@ use Codeception\Event\StepEvent;
 use Codeception\Event\SuiteEvent;
 use Codeception\Events;
 use Codeception\Module\WebDriver;
-use Vaimo\CodeceptionCssRegression\Module\CssRegression;
-use Vaimo\CodeceptionCssRegression\Util\FileSystem;
 
 /**
  * Generates an html file with all failed tests that contains the reference image, failed image and diff image.
@@ -31,10 +29,11 @@ use Vaimo\CodeceptionCssRegression\Util\FileSystem;
  *         Vaimo\CodeceptionCssRegression\Extension\CssRegressionReporter
  *             templateFolder: /my/path/to/my/templates
  * ```
- *
  */
 class CssRegressionReporter extends \Codeception\Extension
 {
+    const DS = DIRECTORY_SEPARATOR;
+
     static $events = [
         Events::RESULT_PRINT_AFTER => 'resultPrintAfter',
         Events::STEP_AFTER => 'stepAfter',
@@ -52,9 +51,9 @@ class CssRegressionReporter extends \Codeception\Extension
     protected $failedIdentifiers = [];
 
     /**
-     * @var FileSystem
+     * @var \Vaimo\CodeceptionCssRegression\Util\FileSystem
      */
-    protected $fileSystemUtil;
+    protected $fileSystem;
 
     /**
      * @var array
@@ -72,11 +71,10 @@ class CssRegressionReporter extends \Codeception\Extension
         $this->runtimeUtils = new \Vaimo\CodeceptionCssRegression\Util\Runtime();
         
         if (empty($this->config['templateFolder'])) {
-            $this->config['templateFolder'] = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'Templates';
+            $this->config['templateFolder'] = __DIR__ . self::DS . '..' . self::DS . 'Templates';
         }
 
-        $this->config['templateFolder'] = rtrim($this->config['templateFolder'],
-                DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $this->config['templateFolder'] = rtrim($this->config['templateFolder'], self::DS) . self::DS;
 
         parent::__construct($config, $options);
     }
@@ -87,12 +85,9 @@ class CssRegressionReporter extends \Codeception\Extension
      */
     public function suiteInit(SuiteEvent $suiteEvent)
     {
-        /** @var CssRegression $cssRegressionModule */
-        $cssRegressionModule = $this->getModule(
-            \Vaimo\CodeceptionCssRegression\Module\CssRegression::class
-        );
+        $module = $this->getModule(\Vaimo\CodeceptionCssRegression\Module\CssRegression::class);
         
-        $this->fileSystemUtil = new FileSystem($cssRegressionModule);
+        $this->fileSystem = new \Vaimo\CodeceptionCssRegression\Util\FileSystem($module, $module->_getInitTime());
     }
 
     /**
@@ -101,20 +96,25 @@ class CssRegressionReporter extends \Codeception\Extension
      */
     public function resultPrintAfter(PrintResultEvent $printResultEvent)
     {
-        if (count($this->failedIdentifiers) > 0) {
-            $items = '';
-            $itemTemplate = new \Text_Template($this->config['templateFolder'] . 'Item.html');
-            foreach ($this->failedIdentifiers as $vars) {
-                $itemTemplate->setVar($vars);
-                $items .= $itemTemplate->render();
-            }
-
-            $pageTemplate = new \Text_Template($this->config['templateFolder'] . 'Page.html');
-            $pageTemplate->setVar(array('items' => $items));
-            $reportPath = $this->fileSystemUtil->getFailImageDirectory() . DIRECTORY_SEPARATOR .  'index.html';
-            $pageTemplate->renderTo($reportPath);
-            $printResultEvent->getPrinter()->write('Report has been created: ' . $reportPath . "\n");
+        if (count($this->failedIdentifiers) <= 0) {
+            return;
         }
+
+        $items = '';
+        $itemTemplate = new \Text_Template($this->config['templateFolder'] . 'Item.html');
+        foreach ($this->failedIdentifiers as $vars) {
+            $itemTemplate->setVar($vars);
+            $items .= $itemTemplate->render();
+        }
+
+        $pageTemplate = new \Text_Template($this->config['templateFolder'] . 'Page.html');
+        $pageTemplate->setVar(array('items' => $items));
+
+        $reportPath = $this->fileSystem->getFailImageDirectory() . self::DS .  'index.html';
+
+        $pageTemplate->renderTo($reportPath);
+
+        $printResultEvent->getPrinter()->write('Report has been created: ' . $reportPath . "\n");
     }
 
     /**
@@ -122,34 +122,40 @@ class CssRegressionReporter extends \Codeception\Extension
      */
     public function stepAfter(StepEvent $stepEvent)
     {
-        if ($stepEvent->getStep()->hasFailed() && $stepEvent->getStep()->getAction('dontSeeDifferencesWithReferenceImage')) {
-            /** @var WebDriver $stepWebDriver */
-            $stepWebDriver = $stepEvent->getTest()->getScenario()->current('modules')['WebDriver'];
-            $identifier = $stepEvent->getStep()->getArguments()[0];
-            $windowSize = $this->fileSystemUtil->getCurrentWindowSizeString($stepWebDriver);
-
-            $imageName = $identifier . '-' . $windowSize;
-            $contextPath = $this->runtimeUtils->getContextPath($stepEvent->getTest());
-            
-            $this->failedIdentifiers[] = array(
-                'identifier' => $identifier,
-                'windowSize' => $windowSize,
-                'failImage' => base64_encode(
-                    file_get_contents(
-                        $this->fileSystemUtil->getFailImagePath($imageName, $contextPath, 'fail')
-                    )
-                ),
-                'diffImage' => base64_encode(
-                    file_get_contents(
-                        $this->fileSystemUtil->getFailImagePath($imageName, $contextPath, 'diff')
-                    )
-                ),
-                'referenceImage' => base64_encode(
-                    file_get_contents(
-                        $this->fileSystemUtil->getReferenceImagePath($imageName, $contextPath)
-                    )
-                )
-            );
+        if (!$stepEvent->getStep()->hasFailed()) {
+            return;
         }
+
+        if (!$stepEvent->getStep()->getAction('dontSeeDifferencesWithReferenceImage')) {
+            return;
+        }
+
+        /** @var WebDriver $stepWebDriver */
+        $stepWebDriver = $stepEvent->getTest()->getScenario()->current('modules')['WebDriver'];
+        $identifier = $stepEvent->getStep()->getArguments()[0];
+        $windowSize = $this->fileSystem->getCurrentWindowSizeString($stepWebDriver);
+
+        $imageName = $identifier . '-' . $windowSize;
+        $contextPath = $this->runtimeUtils->getContextPath($stepEvent->getTest());
+
+        $this->failedIdentifiers[] = array(
+            'identifier' => $identifier,
+            'windowSize' => $windowSize,
+            'failImage' => base64_encode(
+                file_get_contents(
+                    $this->fileSystem->getFailImagePath($imageName, $contextPath, 'fail')
+                )
+            ),
+            'diffImage' => base64_encode(
+                file_get_contents(
+                    $this->fileSystem->getFailImagePath($imageName, $contextPath, 'diff')
+                )
+            ),
+            'referenceImage' => base64_encode(
+                file_get_contents(
+                    $this->fileSystem->getReferenceImagePath($imageName, $contextPath)
+                )
+            )
+        );
     }
 }
