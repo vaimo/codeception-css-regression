@@ -94,13 +94,6 @@ class CssRegression extends Module
         $this->logger = new \Codeception\Lib\Console\Output([]);
         $this->runtimeUtils = new \Vaimo\CodeceptionCssRegression\Util\Runtime();
 
-        if (!class_exists('\\Imagick')) {
-            throw new ModuleException(__CLASS__,
-                'Required class \\Imagick could not be found!
-                Please install the PHP Image Magick extension to use this module.'
-            );
-        }
-
         $this->moduleFileSystemUtil = new RegressionFileSystem($this);
 
         if (self::$moduleInitTime === 0) {
@@ -147,13 +140,13 @@ class CssRegression extends Module
         }
     }
     
-    protected function writeImage(\Imagick $image, $path)
+    protected function copyImage($imagePath, $path)
     {
         $this->moduleFileSystemUtil->createDirectoryRecursive(
             dirname($path)
         );
 
-        $image->writeImage($path);
+        copy($imagePath, $path);
     }
     
     /**
@@ -185,7 +178,7 @@ class CssRegression extends Module
         }
         
         /** @var RemoteWebElement $element */
-        $image = $this->_createScreenshot($identifier, reset($elements));
+        $imagePath = $this->_createScreenshot($identifier, reset($elements));
 
         $windowSizeString = $this->moduleFileSystemUtil->getCurrentWindowSizeString($this->webDriver);
 
@@ -206,73 +199,67 @@ class CssRegression extends Module
                 dirname($referenceImagePath)
             );
             
-            copy($image->getImageFilename(), $referenceImagePath);
+            copy($imagePath, $referenceImagePath);
         } else {
-            $referenceImage = new \Imagick($referenceImagePath);
+            $image1 = new \Undemanding\Difference\Image($referenceImagePath);
+            $image2 = new \Undemanding\Difference\Image($imagePath);
 
-            // Match image sizes to prevent Imagick exception
-            $referenceImageSize = $referenceImage->getImageGeometry();
-            $imageSize = $image->getImageGeometry();
-            
-            $maxWidth = max($referenceImageSize['width'], $imageSize['width']);
-            $maxHeight = max($referenceImageSize['height'], $imageSize['height']);
+            $difference = $image1->difference(
+                $image2,
+                new \Undemanding\Difference\Method\EuclideanDistance()
+            );
 
-            $referenceImage->extentImage($maxWidth, $maxHeight, 0, 0);
-            $image->extentImage($maxWidth, $maxHeight, 0, 0);
+            $percentage = round($difference->percentage(), 2);
 
-            try {
-                /** @var \Imagick $comparedImage */
-                list($comparedImage, $difference) = $referenceImage->compareImages(
-                    $image,
-                    \Imagick::METRIC_MEANSQUAREERROR
-                );
+            $messageTag = $percentage > $this->config['maxDifference'] ? 'error' : 'info';
 
-                $difference = round((float)round($difference, 4) * 100, 2);
-                $messageTag = $difference > $this->config['maxDifference'] ? 'error' : 'info';
-
-                if ($difference) {
-                    $this->logger->writeln(
-                        sprintf(
-                            '<%s>Visual difference detected for "%s": %s%%</%s>',
-                            $messageTag,
-                            $identifier,
-                            $difference,
-                            $messageTag
-                        )
-                    );   
-                }
-
-                if ($difference > $this->config['maxDifference']) {
-                    $this->writeImage(
-                        $image,
-                        $this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'fail')
-                    );
-
-                    $comparedImage->setImageFormat('png');
-
-                    $this->writeImage(
-                        $comparedImage,
-                        $this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'diff')
-                    );
-                    
-                    $this->fail(
-                        sprintf('Page content for "%s" differs from reference image', $selector)
-                    );
-                }
-            } catch (\ImagickException $e) {
-                $this->debug(
+            if ($percentage) {
+                $this->logger->writeln(
                     sprintf(
-                        'Could not compare %s and %s: %s',
-                        $referenceImage,
-                        $image,
-                        $e->getMessage()
+                        '<%s>Visual difference detected for "%s": %s%%</%s>',
+                        $messageTag,
+                        $identifier,
+                        $percentage,
+                        $messageTag
                     )
                 );
-                
+            }
+
+            if ($percentage > $this->config['maxDifference']) {
+                $this->copyImage(
+                    $imagePath,
+                    $this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'fail')
+                );
+
+                $connected1 = new \Undemanding\Difference\ConnectedDifferences($difference);
+                $handle = imagecreatefrompng($imagePath);
+                $color = imagecolorallocate($handle, 255, 0, 0);
+
+                foreach ($connected1->boundaries() as $boundary) {
+                    imagerectangle(
+                        $handle,
+                        $boundary['left'],
+                        $boundary['top'],
+                        $boundary['right'],
+                        $boundary['bottom'],
+                        $color
+                    );
+                }
+
+                $diffPath = $this->moduleFileSystemUtil->getFailImagePath($imageName, $contextPath, 'diff');
+
+                $this->moduleFileSystemUtil->createDirectoryRecursive(
+                    dirname($diffPath)
+                );
+
+                imagepng($handle, $diffPath);
+                imagedestroy($handle);
+
                 $this->fail(
-                    sprintf('%s, %s and %s', $e->getMessage(), $referenceImage, $image)
+                    sprintf('Page content for "%s" differs from reference image', $selector)
                 );
             }
+
         }
     }
 
@@ -333,7 +320,7 @@ class CssRegression extends Module
     /**
      * @param string $referenceImageName
      * @param RemoteWebElement $element
-     * @return \Imagick
+     * @return string
      */
     protected function _createScreenshot($referenceImageName, RemoteWebElement $element)
     {
@@ -343,28 +330,40 @@ class CssRegression extends Module
         }
 
         $tempImagePath = $this->moduleFileSystemUtil->getTempImagePath($referenceImageName);
-        $this->webDriver->webDriver->takeScreenshot($tempImagePath);
-
-        $image = new \Imagick($tempImagePath);
-
-        $takeCoordinatesFrom = $this->config['fullScreenshots'] ? 'onPage' : 'inViewPort';
-
-        $image->cropImage(
-            $element->getSize()->getWidth(),
-            $element->getSize()->getHeight(),
-            $element->getCoordinates()->{$takeCoordinatesFrom}()->getX(),
-            $element->getCoordinates()->{$takeCoordinatesFrom}()->getY()
-        );
-        
-        $image->setImageFormat('png');
 
         $this->moduleFileSystemUtil->createDirectoryRecursive(
             dirname($tempImagePath)
         );
-        
-        $image->writeImage($tempImagePath);
 
-        return $image;
+        $this->webDriver->webDriver->takeScreenshot($tempImagePath);
+
+        $image = imagecreatefrompng($tempImagePath);
+
+        if ($this->config['fullScreenshots']) {
+            $posX = $element->getCoordinates()->onPage()->getX();
+            $posY = $element->getCoordinates()->onPage()->getY();
+        } else {
+            $posX = $element->getCoordinates()->inViewPort()->getX();
+            $posY = $element->getCoordinates()->inViewPort()->getY();
+        }
+
+        $elementSize = $element->getSize();
+
+        $croppedImage = imagecrop($image, [
+            'x' => $posX,
+            'y' => $posY,
+            'width' => $elementSize->getWidth(),
+            'height' => $elementSize->getHeight()]
+        );
+
+        $this->moduleFileSystemUtil->createDirectoryRecursive(
+            dirname($tempImagePath)
+        );
+
+        imagepng($croppedImage, $tempImagePath);
+        imagedestroy($croppedImage);
+
+        return $tempImagePath;
     }
 
     /**
