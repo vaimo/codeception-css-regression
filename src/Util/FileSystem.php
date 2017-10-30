@@ -73,7 +73,7 @@ class FileSystem
     {
         $windowSize = $webDriver->webDriver->manage()->window()->getSize();
 
-        return ($windowSize->getWidth() - $this->module->_getConfig('widthOffset')) . 'x' . $windowSize->getHeight();
+        return $windowSize->getWidth() . 'x' . $windowSize->getHeight();
     }
 
     public function sanitizeFilename($name)

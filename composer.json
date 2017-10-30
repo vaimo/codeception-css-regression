@@ -19,7 +19,7 @@
     ],
     "require": {
         "codeception/codeception": "*",
-        "vaimo/image-difference": "^1.1.2",
+        "vaimo/image-difference": "^1.2.0",
         "kosinix/grafika": "^2.0.8",
         "php": ">=5.4.0"
     },
