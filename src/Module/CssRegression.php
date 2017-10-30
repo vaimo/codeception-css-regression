@@ -81,11 +81,6 @@ class CssRegression extends \Codeception\Module
     private $imageEditor;
 
     /**
-     * @var array
-     */
-    private $tmpImagePaths = [];
-
-    /**
      * @var int
      */
     private $captureCounter = 0;
@@ -116,14 +111,13 @@ class CssRegression extends \Codeception\Module
             return;
         }
 
+        $failDir = dirname($this->fileSystem->getFailImageDirectory());
 
-        if (!is_dir($this->fileSystem->getFailImageDirectory())) {
+        if (!is_dir($failDir)) {
             return;
         }
 
-        \Codeception\Util\FileSystem::doEmptyDir(
-            $this->fileSystem->getFailImageDirectory()
-        );
+        \Codeception\Util\FileSystem::doEmptyDir($failDir);
     }
 
     public function _beforeSuite($settings = [])
@@ -144,15 +138,7 @@ class CssRegression extends \Codeception\Module
             return;
         }
 
-        foreach ($this->tmpImagePaths as $imagePath) {
-            if (!file_exists($imagePath)) {
-                continue;
-            }
-
-            @unlink($imagePath);
-        }
-
-        $this->tmpImagePaths = [];
+        $this->fileSystem->cleanupTemporaryFiles();
     }
 
     public function _getInitTime()
@@ -514,7 +500,7 @@ class CssRegression extends \Codeception\Module
 
         $sizeString = $this->fileSystem->getCurrentWindowSizeString($this->webDriver);
 
-        $tempImagePath = $this->fileSystem->getTempImagePath(
+        $tempImagePath = $this->fileSystem->getTemporaryImagePath(
             $referenceImageName,
             $sizeString
         );

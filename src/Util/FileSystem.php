@@ -15,7 +15,13 @@ class FileSystem
     protected $currentRunDirectory;
 
     /**
+     * @var array
+     */
+    private $tmpImagePaths = [];
+
+    /**
      * @param \Vaimo\CodeceptionCssRegression\Module\CssRegression $module
+     * @param string $currentRunDirectory
      */
     public function __construct(
         \Vaimo\CodeceptionCssRegression\Module\CssRegression $module,
@@ -23,6 +29,19 @@ class FileSystem
     ) {
         $this->module = $module;
         $this->currentRunDirectory = $currentRunDirectory;
+    }
+
+    public function cleanupTemporaryFiles()
+    {
+        foreach ($this->tmpImagePaths as $imagePath) {
+            if (!file_exists($imagePath)) {
+                continue;
+            }
+
+            @unlink($imagePath);
+        }
+
+        $this->tmpImagePaths = [];
     }
 
     public function createDirectoryRecursive($path)
@@ -109,7 +128,7 @@ class FileSystem
         );
     }
 
-    public function getTempImagePath($identifier, $sizeString)
+    public function getTemporaryImagePath($identifier, $sizeString)
     {
         $fileNameParts = array(
             $this->currentRunDirectory,
@@ -118,10 +137,14 @@ class FileSystem
             'png'
         );
 
-        return $this->getPath(
+        $path = $this->getPath(
             $this->getTempDirectory(),
             implode('.', $fileNameParts)
         );
+
+        $this->tmpImagePaths[] = $path;
+
+        return $path;
     }
 
     public function getTempDirectory()
@@ -138,7 +161,7 @@ class FileSystem
             DIRECTORY_SEPARATOR, 
             array_map(function ($item) {
                 return rtrim($item, DIRECTORY_SEPARATOR);
-            }, func_get_args())
+            }, array_filter(func_get_args()))
         );
     }
 }
